@@ -1,5 +1,6 @@
 create extension if not exists pg_net with schema extensions;
 create extension if not exists vector with schema extensions;
+set search_path = public, extensions;
 
 create table documents (
   id bigint primary key generated always as identity,
@@ -118,3 +119,6 @@ create trigger on_file_upload
   after insert on storage.objects
   for each row
   execute procedure private.handle_storage_update();
+
+
+
