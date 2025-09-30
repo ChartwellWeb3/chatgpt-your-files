@@ -1,19 +1,24 @@
-'use client';
+"use client";
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { usePipeline } from '@/lib/hooks/use-pipeline';
-import { cn } from '@/lib/utils';
-import { Database } from '@/supabase/functions/_lib/database';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { useChat } from 'ai/react';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ResidencePicker } from "@/components/residence-picker";
+import { usePipeline } from "@/lib/hooks/use-pipeline";
+import { cn } from "@/lib/utils";
+import type { Database } from "@/supabase/functions/_lib/database";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { useChat } from "ai/react";
+import { useState } from "react";
 
 export default function ChatPage() {
   const supabase = createClientComponentClient<Database>();
+  const [selectedResidence, setSelectedResidence] = useState<string | null>(
+    null
+  );
 
   const generateEmbedding = usePipeline(
-    'feature-extraction',
-    'Supabase/gte-small'
+    "feature-extraction",
+    "Supabase/gte-small"
   );
 
   const { messages, input, handleInputChange, handleSubmit, isLoading } =
@@ -23,16 +28,30 @@ export default function ChatPage() {
 
   const isReady = !!generateEmbedding;
 
+  const scopeDisplayName =
+    selectedResidence === null ? "Common" : selectedResidence;
+
   return (
     <div className="max-w-6xl flex flex-col items-center w-full h-full">
-      <div className="flex flex-col w-full gap-6 grow my-2 sm:my-10 p-4 sm:p-8 sm:border rounded-sm overflow-y-auto">
+      <div className="w-full border-b px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Chatting in:</span>
+          <span className="font-semibold">{scopeDisplayName}</span>
+          <span className="text-sm text-muted-foreground">(+ Common)</span>
+        </div>
+        <ResidencePicker
+          selectedResidence={selectedResidence}
+          onResidenceChange={setSelectedResidence}
+        />
+      </div>
+      <div className="flex flex-col w-full gap-6 grow my-2 sm:my-10 p-4 sm:p-8 overflow-y-auto">
         <div className="border-slate-400 rounded-lg flex flex-col justify-start gap-4 pr-2 grow overflow-y-scroll">
           {messages.map(({ id, role, content }) => (
             <div
               key={id}
               className={cn(
-                'rounded-xl bg-gray-500 text-white px-4 py-2 max-w-lg',
-                role === 'user' ? 'self-end bg-blue-600' : 'self-start'
+                "rounded-xl bg-gray-500 text-white px-4 py-2 max-w-lg",
+                role === "user" ? "self-end bg-blue-600" : "self-start"
               )}
             >
               {content}
@@ -64,11 +83,11 @@ export default function ChatPage() {
           onSubmit={async (e) => {
             e.preventDefault();
             if (!generateEmbedding) {
-              throw new Error('Unable to generate embeddings');
+              throw new Error("Unable to generate embeddings");
             }
 
             const output = await generateEmbedding(input, {
-              pooling: 'mean',
+              pooling: "mean",
               normalize: true,
             });
 
@@ -89,6 +108,7 @@ export default function ChatPage() {
                 },
                 body: {
                   embedding,
+                  residence_custom_id: selectedResidence,
                 },
               },
             });
