@@ -2,6 +2,9 @@
 -- All authenticated users will have equal permissions
 
 -- Step 1: Create residences table
+create extension if not exists vector with schema extensions;
+set local search_path = public, extensions;  
+
 create table residences (
   id bigint primary key generated always as identity,
   name text not null,

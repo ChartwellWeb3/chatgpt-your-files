@@ -2,7 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { OpenAIStream, StreamingTextResponse } from "ai";
 import { codeBlock } from "common-tags";
 import OpenAI from "openai";
-import { Database } from "../_lib/database.ts";
+import type { Database } from "../_lib/database.ts";
+import { Deno } from "deno";
 
 const openai = new OpenAI({
   apiKey: Deno.env.get("OPENAI_API_KEY"),
@@ -13,7 +14,7 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
 export const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": "localhost:3000, https://chat.supabase.com",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
@@ -58,12 +59,13 @@ Deno.serve(async (req) => {
     },
   });
 
-  const { messages, embedding } = await req.json();
+  const { messages, embedding, residence_custom_id } = await req.json();
 
   const { data: documents, error: matchError } = await supabase
     .rpc("match_document_sections", {
       embedding,
       match_threshold: 0.8,
+      residence_custom_id: residence_custom_id || null,
     })
     .select("content")
     .limit(5);
@@ -116,14 +118,8 @@ Deno.serve(async (req) => {
     ];
 
   const completionStream = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-3.5-turbo-0125",
     messages: completionMessages,
-    tool_choice: "none",
-    input: [
-      { role: "developer", content: system },
-      ...sanitized,
-      { role: "user", content: message },
-    ],
     max_tokens: 1024,
     temperature: 0,
     stream: true,
