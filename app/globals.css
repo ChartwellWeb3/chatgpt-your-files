@@ -4,66 +4,36 @@
 
 @layer base {
   :root {
-    /* Updated to soft, modern color palette with purple accents */
-    --background: 250 100% 98%;
-    --foreground: 240 10% 15%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 15%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 15%;
-
-    --primary: 262 83% 58%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 250 100% 96%;
-    --secondary-foreground: 262 83% 58%;
-
-    --muted: 250 60% 95%;
-    --muted-foreground: 240 5% 50%;
-
-    --accent: 262 83% 58%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 250 30% 90%;
-    --input: 250 30% 94%;
-    --ring: 262 83% 58%;
-
-    --radius: 0.75rem;
-  }
-
-  .dark {
-    --background: 240 10% 8%;
+    /* Updated to Vercel-inspired dark theme with green accents */
+    --background: 0 0% 4%;
     --foreground: 0 0% 98%;
 
-    --card: 240 10% 10%;
+    --card: 0 0% 6%;
     --card-foreground: 0 0% 98%;
 
-    --popover: 240 10% 10%;
+    --popover: 0 0% 6%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 262 83% 58%;
+    --primary: 142 76% 36%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 10% 15%;
+    --secondary: 0 0% 10%;
     --secondary-foreground: 0 0% 98%;
 
-    --muted: 240 10% 15%;
-    --muted-foreground: 240 5% 60%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 60%;
 
-    --accent: 262 83% 58%;
+    --accent: 142 76% 36%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 62.8% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 240 10% 18%;
-    --input: 240 10% 15%;
-    --ring: 262 83% 58%;
+    --border: 0 0% 14%;
+    --input: 0 0% 10%;
+    --ring: 142 76% 36%;
+
+    --radius: 0.5rem;
   }
 }
 
@@ -77,24 +47,46 @@
   }
 }
 
-/* Added gradient background for chat page */
+/* Added smooth animations and transitions */
 @layer utilities {
-  .gradient-bg {
-    background: linear-gradient(135deg,
-        hsl(310, 100%, 95%) 0%,
-        hsl(250, 100%, 96%) 25%,
-        hsl(220, 100%, 96%) 50%,
-        hsl(200, 100%, 95%) 75%,
-        hsl(180, 100%, 95%) 100%);
+  .animate-in {
+    animation: slideIn 0.3s ease-out;
   }
 
-  .chat-message-user {
-    background: linear-gradient(135deg, hsl(262, 83%, 58%) 0%, hsl(272, 83%, 65%) 100%);
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-out;
   }
 
-  .chat-message-assistant {
-    background: hsl(0, 0%, 100%);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  .glass-effect {
+    background: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .shadow-glow {
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.1);
   }
 }
 

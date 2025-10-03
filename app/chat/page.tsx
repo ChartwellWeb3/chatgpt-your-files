@@ -25,7 +25,7 @@ export default function ChatPage() {
 
   const { messages, input, handleInputChange, handleSubmit, isLoading } =
     useChat({
-      api: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`,
+      api: "/api/chat", // Use the local proxy route instead of the Supabase URL
     });
 
   const isReady = !!generateEmbedding;
