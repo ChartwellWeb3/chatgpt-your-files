@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
-import type { Database } from "@/lib/database.types";
+import type { Database } from "../../supabase/functions/_lib/database";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -93,7 +93,7 @@ export default function DashboardPage() {
         .select();
       if (error) throw error;
 
-      return (data as Document[]).filter((doc) => {
+      return (data as unknown as Document[]).filter((doc) => {
         if (selectedResidence === null) {
           return doc.is_common === true;
         }

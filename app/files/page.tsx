@@ -18,6 +18,17 @@ export default function FilesPage() {
     null
   );
 
+  type DocumentWithResidence = {
+    created_at: string | null;
+    created_by: string | null;
+    id: number | null;
+    name: string | null;
+    storage_object_id: string | null;
+    storage_object_path: string | null;
+    residence_custom_id: string | null;
+    is_common: boolean | null;
+  };
+
   const { data: documents, refetch } = useQuery(["files"], async () => {
     const { data, error } = await supabase
       .from("documents_with_storage_path")
@@ -31,7 +42,7 @@ export default function FilesPage() {
       throw error;
     }
 
-    return data;
+    return data as DocumentWithResidence[];
   });
 
   const filteredDocuments = documents?.filter((doc) => {
