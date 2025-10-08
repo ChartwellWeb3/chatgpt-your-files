@@ -55,6 +55,8 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<"files" | "chat">("files");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  // ...existing code...
 
   const generateEmbedding = usePipeline(
     "feature-extraction",
@@ -104,6 +106,35 @@ export default function DashboardPage() {
       enabled: selectedResidence !== null,
     }
   );
+
+  const [residenceSearch, setResidenceSearch] = useState("");
+  const [filteredResidences, setFilteredResidences] = useState<Residence[]>([]);
+  const [fileSearch, setFileSearch] = useState("");
+  const [filteredDocuments, setFilteredDocuments] = useState<Document[]>([]);
+
+  useEffect(() => {
+    if (!residences) {
+      setFilteredResidences([]);
+      setFilteredDocuments([]);
+      return;
+    }
+    setFilteredResidences(
+      residenceSearch.trim()
+        ? residences.filter((r: Residence) =>
+            r.name
+              .toLowerCase()
+              .startsWith(residenceSearch.trim().toLowerCase())
+          )
+        : residences
+    );
+    setFilteredDocuments(
+      fileSearch.trim()
+        ? (documents ?? []).filter((d: Document) =>
+            d.name?.toLowerCase().includes(fileSearch.trim().toLowerCase())
+          )
+        : documents ?? []
+    );
+  }, [residences, residenceSearch, documents, fileSearch]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -229,22 +260,38 @@ export default function DashboardPage() {
     });
   };
 
-  const uploadFile = async (file: File) => {
-    const uuid = crypto.randomUUID();
+  const uploadFiles = async (files: FileList | File[]) => {
     const scope = selectedResidence?.custom_id || "common";
-    const storagePath = `${scope}/${uuid}/${file.name}`;
-
-    const { error } = await supabase.storage
-      .from("files")
-      .upload(storagePath, file);
-
-    if (error) {
-      toast({ variant: "destructive", description: "Failed to upload file" });
-      return;
+    let successCount = 0;
+    let failCount = 0;
+    for (const file of Array.from(files)) {
+      const uuid = crypto.randomUUID();
+      const storagePath = `${scope}/${uuid}/${file.name}`;
+      const { error } = await supabase.storage
+        .from("files")
+        .upload(storagePath, file);
+      if (error) {
+        failCount++;
+      } else {
+        successCount++;
+      }
     }
-
-    toast({ description: `File uploaded successfully` });
-    refetchDocuments();
+    if (successCount > 0) {
+      toast({
+        description: `${successCount} file${
+          successCount > 1 ? "s" : ""
+        } uploaded successfully`,
+      });
+      refetchDocuments();
+    }
+    if (failCount > 0) {
+      toast({
+        variant: "destructive",
+        description: `${failCount} file${
+          failCount > 1 ? "s" : ""
+        } failed to upload`,
+      });
+    }
   };
 
   const deleteDocument = async (doc: Document) => {
@@ -272,15 +319,23 @@ export default function DashboardPage() {
     <div className="flex h-full">
       {/* Sidebar - Residence List */}
       <div className="w-80 border-r border-border bg-card/30 flex flex-col">
-        <div className="p-4 border-b border-border flex items-center justify-between">
-          <h2 className="font-semibold text-sm">Residences</h2>
-          <Button
-            size="sm"
-            onClick={() => setIsCreating(true)}
-            className="h-8 w-8 p-0 bg-primary/10 hover:bg-primary/20 text-primary"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
+        <div className="p-4 border-b border-border flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-sm">Residences</h2>
+            <Button
+              size="sm"
+              onClick={() => setIsCreating(true)}
+              className="h-8 w-8 p-0 bg-primary/10 hover:bg-primary/20 text-primary"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+          <Input
+            placeholder="Search residences..."
+            value={residenceSearch}
+            onChange={(e) => setResidenceSearch(e.target.value)}
+            className="h-8 text-sm"
+          />
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -290,7 +345,7 @@ export default function DashboardPage() {
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              residences?.map((residence) => (
+              filteredResidences.map((residence) => (
                 <div
                   key={residence.id}
                   onClick={() => {
@@ -490,8 +545,8 @@ export default function DashboardPage() {
                     <div>
                       <h2 className="text-lg font-semibold">Files</h2>
                       <p className="text-sm text-muted-foreground">
-                        {documents?.length || 0} file
-                        {documents?.length !== 1 ? "s" : ""}
+                        {filteredDocuments.length || 0} file
+                        {filteredDocuments.length !== 1 ? "s" : ""}
                       </p>
                     </div>
                     <Button
@@ -499,22 +554,60 @@ export default function DashboardPage() {
                       className="gap-2"
                     >
                       <Upload className="h-4 w-4" />
-                      Upload File
+                      Upload Files
                     </Button>
                     <input
                       ref={fileInputRef}
                       type="file"
+                      multiple
                       className="hidden"
                       onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) uploadFile(file);
+                        const files = e.target.files;
+                        if (files && files.length > 0) uploadFiles(files);
                         e.target.value = "";
                       }}
                     />
                   </div>
+                  <Input
+                    placeholder="Search files..."
+                    value={fileSearch}
+                    onChange={(e) => setFileSearch(e.target.value)}
+                    className="h-8 text-sm mb-4"
+                  />
+                  {/* Drag and Drop Zone */}
+                  <div
+                    className={cn(
+                      "border-2 border-dashed rounded-lg p-6 text-center transition-colors mb-6",
+                      isDragging
+                        ? "border-primary bg-primary/10"
+                        : "border-border bg-card/50"
+                    )}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragging(true);
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+                      setIsDragging(false);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDragging(false);
+                      if (
+                        e.dataTransfer.files &&
+                        e.dataTransfer.files.length > 0
+                      ) {
+                        uploadFiles(e.dataTransfer.files);
+                      }
+                    }}
+                  >
+                    <p className="text-muted-foreground">
+                      Drag and drop files here, or click "Upload Files"
+                    </p>
+                  </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {documents?.map((doc) => (
+                    {filteredDocuments.map((doc) => (
                       <div
                         key={doc.id}
                         className="group relative p-4 rounded-lg border border-border bg-card hover:bg-card/80 transition-all hover:shadow-lg"
@@ -541,7 +634,7 @@ export default function DashboardPage() {
                     ))}
                   </div>
 
-                  {documents?.length === 0 && (
+                  {filteredDocuments.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-16 text-center">
                       <div className="w-16 h-16 bg-muted/30 rounded-full flex items-center justify-center mb-4">
                         <FileText className="h-8 w-8 text-muted-foreground" />
