@@ -19,6 +19,7 @@ import {
   Check,
   Loader2,
   Send,
+  Download,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useChat } from "ai/react";
@@ -294,9 +295,47 @@ export default function DashboardPage() {
     }
   };
 
+  const downloadDocument = async (doc: Document) => {
+    if (!doc.storage_object_path) {
+      toast({ variant: "destructive", description: "No file path found" });
+      return;
+    }
+    // Get public URL for the file
+    const { data } = supabase.storage
+      .from("files")
+      .getPublicUrl(doc.storage_object_path);
+    if (!data || !data.publicUrl) {
+      toast({ variant: "destructive", description: "Failed to get file URL" });
+      return;
+    }
+    // Trigger download
+    window.open(data.publicUrl, "_blank");
+  };
+
   const deleteDocument = async (doc: Document) => {
+    const downloadDocument = async (doc: Document) => {
+      if (!doc.storage_object_path) {
+        toast({ variant: "destructive", description: "No file path found" });
+        return;
+      }
+      // Get public URL for the file
+      const { data } = supabase.storage
+        .from("files")
+        .getPublicUrl(doc.storage_object_path);
+      if (!data || !data.publicUrl) {
+        toast({
+          variant: "destructive",
+          description: "Failed to get file URL",
+        });
+        return;
+      }
+      // Trigger download
+      window.open(data.publicUrl, "_blank");
+    };
+
     if (!confirm("Delete this file?")) return;
 
+    console.log("Deleting from storage:", doc.storage_object_path);
     if (doc.storage_object_path) {
       await supabase.storage.from("files").remove([doc.storage_object_path]);
     }
@@ -615,8 +654,24 @@ export default function DashboardPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => deleteDocument(doc)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadDocument(doc);
+                          }}
+                          className="absolute top-2 right-10 h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-primary hover:bg-primary/10"
+                          title="Download file"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteDocument(doc);
+                          }}
                           className="absolute top-2 right-2 h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:bg-destructive/10"
+                          title="Delete file"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
