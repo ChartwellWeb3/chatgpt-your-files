@@ -88,20 +88,42 @@ export default function DashboardPage() {
     return data as Residence[];
   });
 
+  // const { data: documents, refetch: refetchDocuments } = useQuery<Document[]>(
+  //   ["documents", selectedResidence?.custom_id],
+  //   async () => {
+  //     const { data, error } = await supabase
+  //       .from("documents_with_storage_path")
+  //       .select();
+  //     console.log(data);
+  //     if (error) throw error;
+
+  //     return (data as unknown as Document[]).filter((doc) => {
+  //       if (selectedResidence === null) {
+  //         return doc.is_common === true;
+  //       }
+  //       return doc.residence_custom_id === selectedResidence?.custom_id;
+  //     });
+  //   },
+  //   {
+  //     enabled: selectedResidence !== null,
+  //   }
+  // );
+
   const { data: documents, refetch: refetchDocuments } = useQuery<Document[]>(
     ["documents", selectedResidence?.custom_id],
     async () => {
-      const { data, error } = await supabase
-        .from("documents_with_storage_path")
-        .select();
-      if (error) throw error;
+      let query = supabase.from("documents_with_storage_path").select();
 
-      return (data as unknown as Document[]).filter((doc) => {
-        if (selectedResidence === null) {
-          return doc.is_common === true;
-        }
-        return doc.residence_custom_id === selectedResidence?.custom_id;
-      });
+      if (selectedResidence === null) {
+        query = query.eq("is_common", true);
+      } else {
+        query = query.eq("residence_custom_id", selectedResidence.custom_id);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      return data as unknown as Document[];
     },
     {
       enabled: selectedResidence !== null,
@@ -313,25 +335,25 @@ export default function DashboardPage() {
   };
 
   const deleteDocument = async (doc: Document) => {
-    const downloadDocument = async (doc: Document) => {
-      if (!doc.storage_object_path) {
-        toast({ variant: "destructive", description: "No file path found" });
-        return;
-      }
-      // Get public URL for the file
-      const { data } = supabase.storage
-        .from("files")
-        .getPublicUrl(doc.storage_object_path);
-      if (!data || !data.publicUrl) {
-        toast({
-          variant: "destructive",
-          description: "Failed to get file URL",
-        });
-        return;
-      }
-      // Trigger download
-      window.open(data.publicUrl, "_blank");
-    };
+    // const downloadDocument = async (doc: Document) => {
+    //   if (!doc.storage_object_path) {
+    //     toast({ variant: "destructive", description: "No file path found" });
+    //     return;
+    //   }
+    //   // Get public URL for the file
+    //   const { data } = supabase.storage
+    //     .from("files")
+    //     .getPublicUrl(doc.storage_object_path);
+    //   if (!data || !data.publicUrl) {
+    //     toast({
+    //       variant: "destructive",
+    //       description: "Failed to get file URL",
+    //     });
+    //     return;
+    //   }
+    //   // Trigger download
+    //   window.open(data.publicUrl, "_blank");
+    // };
 
     if (!confirm("Delete this file?")) return;
 
@@ -680,7 +702,7 @@ export default function DashboardPage() {
                             <FileText className="h-6 w-6 text-primary" />
                           </div>
                           <div className="w-full">
-                            <p className="text-sm font-medium truncate">
+                            <p className="text-sm font-medium ">
                               {doc.name}
                             </p>
                           </div>
