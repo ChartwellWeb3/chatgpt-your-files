@@ -317,22 +317,35 @@ export default function DashboardPage() {
     }
   };
 
-  const downloadDocument = async (doc: Document) => {
-    if (!doc.storage_object_path) {
-      toast({ variant: "destructive", description: "No file path found" });
-      return;
-    }
-    // Get public URL for the file
-    const { data } = supabase.storage
-      .from("files")
-      .getPublicUrl(doc.storage_object_path);
-    if (!data || !data.publicUrl) {
-      toast({ variant: "destructive", description: "Failed to get file URL" });
-      return;
-    }
-    // Trigger download
-    window.open(data.publicUrl, "_blank");
-  };
+const downloadDocument = async (doc: Document) => {
+  if (!doc.storage_object_path) {
+    toast({ variant: "destructive", description: "No file path found" });
+    return;
+  }
+
+  // Make sure we pass a clean, bucket-relative path:
+  const path = doc.storage_object_path
+    .replace(/^files\//, "") // remove accidental "files/" prefix if present
+    .replace(/^\/+/, ""); // remove any leading "/"
+
+  // Use a short-lived signed URL so it works for private buckets too
+  const { data, error } = await supabase.storage
+    .from("files")
+    .createSignedUrl(path, 60, { download: true });
+
+  if (error || !data?.signedUrl) {
+    console.error(error);
+    toast({
+      variant: "destructive",
+      description: "Failed to get download URL",
+    });
+    return;
+  }
+
+  // Trigger download
+  window.location.href = data.signedUrl;
+};
+
 
   const deleteDocument = async (doc: Document) => {
     // const downloadDocument = async (doc: Document) => {
