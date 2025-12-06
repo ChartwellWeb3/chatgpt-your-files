@@ -2,6 +2,7 @@ import LogoutButton from "@/components/LogoutButton";
 import { Toaster } from "@/components/ui/toaster";
 import Providers from "@/lib/providers";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
+
 import { cookies } from "next/headers";
 import Link from "next/link";
 import type { PropsWithChildren } from "react";
@@ -14,8 +15,10 @@ export const metadata = {
 };
 
 export default async function RootLayout({ children }: PropsWithChildren) {
-  const cookieStore = cookies();
-  const supabase = createServerComponentClient({ cookies: () => cookieStore });
+  const cookieStore = await cookies();
+  const supabase = createServerComponentClient({
+    cookies: () => cookieStore,
+  });
 
   const {
     data: { user },

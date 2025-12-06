@@ -1,15 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    serverActions: true,
+    serverActions: {},
   },
-  webpack: (config) => {
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      sharp$: false,
-      'onnxruntime-node$': false,
-    };
-    return config;
+  turbopack: {
+    resolveAlias: {
+      // similar idea to webpack's sharp$: false
+      sharp$: "./src/empty-module.js",
+      "onnxruntime-node$": "./src/empty-module.js",
+    },
   },
 };
 

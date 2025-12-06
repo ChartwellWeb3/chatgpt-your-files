@@ -22,8 +22,8 @@ import {
   Download,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
-import { useChat } from "ai/react";
-import { usePipeline } from "@/lib/hooks/use-pipeline";
+// import { useChat } from "ai/react";
+// import { usePipeline } from "@/lib/hooks/use-pipeline";
 import { cn } from "@/lib/utils";
 
 type Residence = {
@@ -59,23 +59,23 @@ export default function DashboardPage() {
   const [isDragging, setIsDragging] = useState(false);
   // ...existing code...
 
-  const generateEmbedding = usePipeline(
-    "feature-extraction",
-    "Supabase/gte-small"
-  );
+  // const generateEmbedding = usePipeline(
+  //   "feature-extraction",
+  //   "Supabase/gte-small"
+  // );
 
-  const {
-    messages,
-    input,
-    handleInputChange,
-    handleSubmit,
-    isLoading,
-    setMessages,
-  } = useChat({
-    api: "/api/chat",
-  });
+  // const {
+  //   messages,
+  //   input,
+  //   handleInputChange,
+  //   handleSubmit,
+  //   isLoading,
+  //   setMessages,
+  // } = useChat({
+  //   api: "/api/chat",
+  // });
 
-  const isReady = !!generateEmbedding;
+  // const isReady = !!generateEmbedding;
 
   const { data: residences, isLoading: loadingResidences } = useQuery<
     Residence[]
@@ -163,9 +163,9 @@ export default function DashboardPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  // useEffect(() => {
+  //   scrollToBottom();
+  // }, [messages]);
 
   const createResidence = async () => {
     if (!newResidenceName.trim()) {
@@ -424,7 +424,7 @@ const downloadDocument = async (doc: Document) => {
                   key={residence.id}
                   onClick={() => {
                     setSelectedResidence(residence);
-                    setMessages([]);
+                    // setMessages([]);
                     setActiveTab("files");
                   }}
                   className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all ${
@@ -595,7 +595,7 @@ const downloadDocument = async (doc: Document) => {
                     <FileText className="h-4 w-4" />
                     Files
                   </Button>
-                  <Button
+                  {/* <Button
                     variant={activeTab === "chat" ? "default" : "ghost"}
                     size="sm"
                     onClick={() => {
@@ -606,7 +606,7 @@ const downloadDocument = async (doc: Document) => {
                   >
                     <MessageSquare className="h-4 w-4" />
                     Chat
-                  </Button>
+                  </Button> */}
                 </div>
               </div>
             </div>
@@ -738,135 +738,136 @@ const downloadDocument = async (doc: Document) => {
                 </div>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col">
-                <div className="flex-1 overflow-y-auto p-6">
-                  <div className="max-w-3xl mx-auto space-y-4">
-                    {messages.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-16 text-center">
-                        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-                          <MessageSquare className="h-8 w-8 text-primary" />
-                        </div>
-                        <p className="text-muted-foreground">
-                          Start a conversation
-                        </p>
-                        <p className="text-sm text-muted-foreground/60 mt-1">
-                          Ask questions about your files in{" "}
-                          {selectedResidence.name}
-                        </p>
-                      </div>
-                    ) : (
-                      messages.map(({ id, role, content }) => (
-                        <div
-                          key={id}
-                          className={cn(
-                            "flex animate-fade-in",
-                            role === "user" ? "justify-end" : "justify-start"
-                          )}
-                        >
-                          <div
-                            className={cn(
-                              "max-w-[80%] p-4 rounded-lg",
-                              role === "user"
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-card border border-border"
-                            )}
-                          >
-                            <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                              {content}
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    )}
+                <></>
+              // <div className="flex-1 flex flex-col">
+              //   <div className="flex-1 overflow-y-auto p-6">
+              //     <div className="max-w-3xl mx-auto space-y-4">
+              //       {messages.length === 0 ? (
+              //         <div className="flex flex-col items-center justify-center py-16 text-center">
+              //           <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+              //             <MessageSquare className="h-8 w-8 text-primary" />
+              //           </div>
+              //           <p className="text-muted-foreground">
+              //             Start a conversation
+              //           </p>
+              //           <p className="text-sm text-muted-foreground/60 mt-1">
+              //             Ask questions about your files in{" "}
+              //             {selectedResidence.name}
+              //           </p>
+              //         </div>
+              //       ) : (
+              //         messages.map(({ id, role, content }) => (
+              //           <div
+              //             key={id}
+              //             className={cn(
+              //               "flex animate-fade-in",
+              //               role === "user" ? "justify-end" : "justify-start"
+              //             )}
+              //           >
+              //             <div
+              //               className={cn(
+              //                 "max-w-[80%] p-4 rounded-lg",
+              //                 role === "user"
+              //                   ? "bg-primary text-primary-foreground"
+              //                   : "bg-card border border-border"
+              //               )}
+              //             >
+              //               <p className="text-sm whitespace-pre-wrap leading-relaxed">
+              //                 {content}
+              //               </p>
+              //             </div>
+              //           </div>
+              //         ))
+              //       )}
 
-                    {isLoading && (
-                      <div className="flex justify-start animate-fade-in">
-                        <div className="bg-card border border-border rounded-lg p-4">
-                          <div className="dot-pulse" />
-                        </div>
-                      </div>
-                    )}
+              //       {isLoading && (
+              //         <div className="flex justify-start animate-fade-in">
+              //           <div className="bg-card border border-border rounded-lg p-4">
+              //             <div className="dot-pulse" />
+              //           </div>
+              //         </div>
+              //       )}
 
-                    <div ref={messagesEndRef} />
-                  </div>
-                </div>
+              //       <div ref={messagesEndRef} />
+              //     </div>
+              //   </div>
 
-                <div className="p-6 border-t border-border bg-card/30">
-                  <form
-                    className="max-w-3xl mx-auto flex gap-2"
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      if (!generateEmbedding || !selectedResidence) {
-                        toast({
-                          variant: "destructive",
-                          description:
-                            "Unable to generate embeddings or no residence selected",
-                        });
-                        return;
-                      }
+              //   <div className="p-6 border-t border-border bg-card/30">
+              //     <form
+              //       className="max-w-3xl mx-auto flex gap-2"
+              //       onSubmit={async (e) => {
+              //         e.preventDefault();
+              //         if (!generateEmbedding || !selectedResidence) {
+              //           toast({
+              //             variant: "destructive",
+              //             description:
+              //               "Unable to generate embeddings or no residence selected",
+              //           });
+              //           return;
+              //         }
 
-                      const output = await generateEmbedding(input, {
-                        pooling: "mean",
-                        normalize: true,
-                      });
+              //         const output = await generateEmbedding(input, {
+              //           pooling: "mean",
+              //           normalize: true,
+              //         });
 
-                      const embedding = JSON.stringify(Array.from(output.data));
+              //         const embedding = JSON.stringify(Array.from(output.data));
 
-                      const {
-                        data: { session },
-                      } = await supabase.auth.getSession();
+              //         const {
+              //           data: { session },
+              //         } = await supabase.auth.getSession();
 
-                      if (!session) {
-                        toast({
-                          variant: "destructive",
-                          description: "Please sign in to chat",
-                        });
-                        return;
-                      }
+              //         if (!session) {
+              //           toast({
+              //             variant: "destructive",
+              //             description: "Please sign in to chat",
+              //           });
+              //           return;
+              //         }
 
-                      handleSubmit(e, {
-                        options: {
-                          headers: {
-                            authorization: `Bearer ${session.access_token}`,
-                          },
-                          body: {
-                            embedding,
-                            residence_custom_id: selectedResidence.custom_id,
-                          },
-                        },
-                      });
-                    }}
-                  >
-                    <Textarea
-                      value={input}
-                      onChange={handleInputChange}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          const form = e.currentTarget.form;
-                          if (form) {
-                            form.requestSubmit();
-                          }
-                        }
-                      }}
-                      placeholder="Ask a question..."
-                      className="min-h-[60px] resize-none"
-                      disabled={isLoading || !isReady}
-                    />
-                    <Button
-                      type="submit"
-                      disabled={isLoading || !input.trim() || !isReady}
-                      className="h-[60px] px-6"
-                    >
-                      {isLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </form>
-                </div>
-              </div>
+              //         handleSubmit(e, {
+              //           options: {
+              //             headers: {
+              //               authorization: `Bearer ${session.access_token}`,
+              //             },
+              //             body: {
+              //               embedding,
+              //               residence_custom_id: selectedResidence.custom_id,
+              //             },
+              //           },
+              //         });
+              //       }}
+              //     >
+              //       <Textarea
+              //         value={input}
+              //         onChange={handleInputChange}
+              //         onKeyDown={(e) => {
+              //           if (e.key === "Enter" && !e.shiftKey) {
+              //             e.preventDefault();
+              //             const form = e.currentTarget.form;
+              //             if (form) {
+              //               form.requestSubmit();
+              //             }
+              //           }
+              //         }}
+              //         placeholder="Ask a question..."
+              //         className="min-h-[60px] resize-none"
+              //         disabled={isLoading || !isReady}
+              //       />
+              //       <Button
+              //         type="submit"
+              //         disabled={isLoading || !input.trim() || !isReady}
+              //         className="h-[60px] px-6"
+              //       >
+              //         {isLoading ? (
+              //           <Loader2 className="h-4 w-4 animate-spin" />
+              //         ) : (
+              //           <Send className="h-4 w-4" />
+              //         )}
+              //       </Button>
+              //     </form>
+              //   </div>
+              // </div>
             )}
           </>
         ) : (
