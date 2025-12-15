@@ -52,7 +52,7 @@ export default async function RootLayout({ children }: PropsWithChildren) {
                       </svg>
                     </div>
                     <span className="font-semibold text-sm">
-                      Residence Manager
+                      Chartwell Manager
                     </span>
                   </Link>
                   {user && (
@@ -61,6 +61,15 @@ export default async function RootLayout({ children }: PropsWithChildren) {
                       className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
                       Dashboard
+                    </Link>
+                  )}
+
+                  {user && (
+                    <Link
+                      href="/analytics"
+                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      analytics
                     </Link>
                   )}
                 </div>

@@ -6,6 +6,10 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
 Deno.serve(async (req) => {
+
+
+  console.log("started");
+  
   if (!supabaseUrl || !supabaseAnonKey) {
     return new Response(
       JSON.stringify({
