@@ -1,23 +1,23 @@
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
+import { createClient } from "./utils/supabase/server";
 import { redirect } from "next/navigation";
 
 export default async function Index() {
-  const cookieStore = await cookies();
-  const supabase = createServerComponentClient({
-    cookies: () => cookieStore,
-  });
+  // 1. Initialize Supabase (await it, and no arguments needed)
+  const supabase = await createClient();
 
+  // 2. Check if user is logged in
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // 3. If logged in, go straight to the app
   if (user) {
-    redirect("/dashboard");
+    redirect("/chatbot-content-management");
   }
 
+  // 4. If not logged in, show the Landing Page
   return (
-    <div className="w-full h-full flex items-center justify-center">
+    <div className="w-full h-full flex items-center justify-center min-h-screen bg-background">
       <div className="flex flex-col items-center gap-8 max-w-2xl px-6 text-center">
         <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center shadow-glow">
           <svg
@@ -35,8 +35,8 @@ export default async function Index() {
           </svg>
         </div>
         <div className="flex flex-col gap-4">
-          <h1 className="text-4xl font-bold text-balance">
-           Chartwell Residence Management System
+          <h1 className="text-4xl font-bold text-balance text-foreground">
+            Chartwell Residence Management System
           </h1>
           <p className="text-lg text-muted-foreground text-balance">
             Organize your files across multiple residences and chat with an AI
@@ -45,7 +45,7 @@ export default async function Index() {
         </div>
         <a
           href="/login"
-          className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-all hover:shadow-glow"
+          className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-all hover:shadow-lg"
         >
           Get Started
         </a>

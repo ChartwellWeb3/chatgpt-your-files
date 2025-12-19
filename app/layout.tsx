@@ -1,13 +1,16 @@
-import LogoutButton from "@/components/LogoutButton";
+
 import { Toaster } from "@/components/ui/toaster";
 import Providers from "@/lib/providers";
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
-
-import { cookies } from "next/headers";
+import NavLink from "@/components/NavLink/NavLink"; // Ensure path is correct
+import { LogoutButton } from "@/components/LogoutButton/LogoutButton";
+import { Links } from "@/app/Links/Links";
 import Link from "next/link";
 import type { PropsWithChildren } from "react";
 import "three-dots/dist/three-dots.css";
 import "./globals.css";
+
+// 1. Import the new server client creator
+import { createClient } from "./utils/supabase/server";
 
 export const metadata = {
   title: "Residence Manager",
@@ -15,10 +18,9 @@ export const metadata = {
 };
 
 export default async function RootLayout({ children }: PropsWithChildren) {
-  const cookieStore = await cookies();
-  const supabase = createServerComponentClient({
-    cookies: () => cookieStore,
-  });
+  // 2. Initialize Supabase using the new SSR utility
+  // Note: createClient() now handles the cookies() call internally
+  const supabase = await createClient();
 
   const {
     data: { user },
@@ -55,23 +57,14 @@ export default async function RootLayout({ children }: PropsWithChildren) {
                       Chartwell Manager
                     </span>
                   </Link>
-                  {user && (
-                    <Link
-                      href="/dashboard"
-                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      Dashboard
-                    </Link>
-                  )}
-
-                  {user && (
-                    <Link
-                      href="/analytics"
-                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      analytics
-                    </Link>
-                  )}
+                  {user &&
+                    Links.map((link) => {
+                      return (
+                        <NavLink key={link.href} href={link.href}>
+                          {link.label}
+                        </NavLink>
+                      );
+                    })}
                 </div>
                 <div className="flex items-center gap-4">
                   {user ? (
@@ -92,7 +85,7 @@ export default async function RootLayout({ children }: PropsWithChildren) {
                 </div>
               </div>
             </nav>
-            <main className="flex-1 overflow-hidden">{children}</main>
+            <main className="flex-1 overflow-auto">{children}</main>
             <Toaster />
           </div>
         </Providers>
