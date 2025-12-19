@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { fmtDate } from "@/app/helpers/fmtDate";
 import { SessionRow, MessageRow, SourceRow } from "@/app/types/types";
 import { useState } from "react";
-import { sources } from "next/dist/compiled/webpack/webpack";
+// import { sources } from "next/dist/compiled/webpack/webpack";
 interface ConversationProps {
   selectedSessionId: string;
   loadingReplay: boolean;
@@ -24,8 +24,8 @@ export const ConversationSection = ({
   selectedSessionId,
   loadingReplay,
   replay,
-  setSelectedSessionId,
-  filteredSessions,
+  // setSelectedSessionId,
+  // filteredSessions,
   selectedVisitorId,
   isBySession,
 }: ConversationProps) => {

@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { createClient } from "../utils/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-// import type { Database } from "../../../supabase/functions/_lib/database";
 import { Button } from "@/components/ui/button";
 import { RefreshCcw } from "lucide-react";
 import { VisitorsSessions } from "./sections/VisitorsSection";
@@ -11,11 +10,33 @@ import { SessionsSection } from "./sections/SessionsSections";
 import { ConversationSection } from "./sections/ConversationSection";
 import { BotBookedToursSection } from "./sections/BotBookedToursSection";
 
-import { SessionRow, VisitorRow } from "../types/types";
+import { SessionRow, VisitorRow, SourceRow, MessageRow } from "../types/types";
 import { Card } from "@/components/ui/card";
 import { useReplay } from "../hooks/useReplay";
 import { useDeleteVisitor } from "../hooks/useDeleteVisitor";
-import { SourceRow, MessageRow } from "../types/types";
+
+type FormFilter = "all" | "submitted" | "not_submitted";
+
+type VisitorFormRow = {
+  visitor_id: string;
+  is_submitted: boolean;
+  submitted_with_button: "dynamic" | "static" | string | null;
+  submitted_at: string | null;
+};
+
+type BookATourStats = {
+  submitted: boolean;
+  totalSubmissions: number;
+  dynamicSubmissions: number;
+  lastSubmittedAt?: string | null;
+};
+
+type DocumentSectionRow = { id: number; document_id: number };
+type DocumentRow = { id: number; name: string };
+
+const EMPTY_VISITORS: VisitorRow[] = [];
+const EMPTY_SESSIONS: SessionRow[] = [];
+const EMPTY_FORMS: VisitorFormRow[] = [];
 
 export default function ChatAnalyticsPage() {
   const supabase = createClient();
@@ -24,7 +45,7 @@ export default function ChatAnalyticsPage() {
   const PAGE_SIZE = 50;
   const [visitorPage, setVisitorPage] = useState(0);
 
-  // Selection
+  // Explicit selections (user-made). We’ll derive “effective” selections below.
   const [selectedVisitorId, setSelectedVisitorId] = useState<string>("");
   const [selectedSessionId, setSelectedSessionId] = useState<string>("");
 
@@ -32,28 +53,15 @@ export default function ChatAnalyticsPage() {
   const [visitorSearch, setVisitorSearch] = useState("");
   const [sessionSearch, setSessionSearch] = useState("");
 
-  type FormFilter = "all" | "submitted" | "not_submitted";
   const [formFilter, setFormFilter] = useState<FormFilter>("all");
 
-  // User chat by sessions or entire conversation
-
+  // Toggle conversation mode
   const [isBySession, setIsBySession] = useState(true);
 
-  const { data: replay, isLoading: loadingReplay } = useReplay(
-    supabase,
-    selectedSessionId
-  );
-
-  const { deleting: deletingVisitor, deleteVisitor } =
-    useDeleteVisitor(supabase);
   // ---- Visitors (load more) ----
-  const {
-    data: visitorsData,
-    isLoading: loadingVisitors,
-    refetch: refetchVisitors,
-  } = useQuery<VisitorRow[]>({
+  const visitorsQuery = useQuery({
     queryKey: ["analytics-visitors", visitorPage],
-    queryFn: async () => {
+    queryFn: async (): Promise<VisitorRow[]> => {
       const from = 0;
       const to = visitorPage * PAGE_SIZE + (PAGE_SIZE - 1);
 
@@ -68,39 +76,40 @@ export default function ChatAnalyticsPage() {
     },
   });
 
-  const visitors = visitorsData ?? [];
+  // ✅ stable reference (no “?? []” creating new array each render)
+  const visitors = visitorsQuery.data ?? EMPTY_VISITORS;
+
+  // ✅ derived “effective” visitor id: if user didn’t pick yet, use first visitor
+  const effectiveVisitorId = useMemo(
+    () => selectedVisitorId || visitors[0]?.id || "",
+    [selectedVisitorId, visitors]
+  );
 
   const visitorIds = useMemo(() => visitors.map((v) => v.id), [visitors]);
 
-  type BookATourStats = {
-    submitted: boolean; // at least one submitted row exists
-    totalSubmissions: number; // count of rows (each insert = new submission)
-    dynamicSubmissions: number; // submitted_with_button === "dynamic"
-    lastSubmittedAt?: string | null;
-  };
-
-  const { data: bookTourRows, isLoading: loadingBookTourRows } = useQuery({
+  // ---- Forms / booked tours per visitor ----
+  const bookTourFormsQuery = useQuery({
     queryKey: ["analytics-visitor-forms", visitorIds],
     enabled: visitorIds.length > 0,
-    queryFn: async () => {
-      // Pull only what you need for analytics
+    queryFn: async (): Promise<VisitorFormRow[]> => {
       const { data, error } = await supabase
         .from("visitor_forms")
         .select("visitor_id,is_submitted,submitted_with_button,submitted_at")
         .in("visitor_id", visitorIds)
-        .eq("form_type", "chat_bot_book_a_tour"); //  target type
+        .eq("form_type", "chat_bot_book_a_tour");
 
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as VisitorFormRow[];
     },
   });
 
-  // Build a map: visitor_id -> stats
+  const bookTourRows = bookTourFormsQuery.data ?? EMPTY_FORMS;
+
   const bookTourStatsByVisitor = useMemo(() => {
     const map = new Map<string, BookATourStats>();
 
-    for (const row of bookTourRows ?? []) {
-      const vid = row.visitor_id as string;
+    for (const row of bookTourRows) {
+      const vid = row.visitor_id;
       const cur = map.get(vid) ?? {
         submitted: false,
         totalSubmissions: 0,
@@ -108,14 +117,11 @@ export default function ChatAnalyticsPage() {
         lastSubmittedAt: null,
       };
 
-      // Each row = one submission attempt/event (your new requirement)
       cur.totalSubmissions += 1;
-
       if (row.is_submitted) cur.submitted = true;
       if (row.submitted_with_button === "dynamic") cur.dynamicSubmissions += 1;
 
-      // last submitted_at
-      const ts = row.submitted_at as string | null;
+      const ts = row.submitted_at;
       if (ts && (!cur.lastSubmittedAt || ts > cur.lastSubmittedAt)) {
         cur.lastSubmittedAt = ts;
       }
@@ -131,52 +137,43 @@ export default function ChatAnalyticsPage() {
     const q = visitorSearch.trim().toLowerCase();
 
     return visitors.filter((v) => {
-      // search filter (same as before)
       if (q && !v.id.toLowerCase().includes(q)) return false;
 
-      // form filter for ONLY chat_bot_book_a_tour
       const stats = bookTourStatsByVisitor.get(v.id);
       const isSubmitted = !!stats?.submitted;
 
       if (formFilter === "submitted") return isSubmitted;
       if (formFilter === "not_submitted") return !isSubmitted;
-      return true; // "all"
+      return true;
     });
   }, [visitors, visitorSearch, formFilter, bookTourStatsByVisitor]);
 
-  // Ensure selection stays valid
-  useEffect(() => {
-    if (!selectedVisitorId && visitors.length > 0) {
-      setSelectedVisitorId(visitors[0].id);
-    }
-  }, [visitors, selectedVisitorId]);
-
   // ---- Sessions for selected visitor ----
-  const {
-    data: sessions,
-    isLoading: loadingSessions,
-    refetch: refetchSessions,
-  } = useQuery<SessionRow[]>({
-    queryKey: ["analytics-sessions", selectedVisitorId],
-    queryFn: async () => {
-      if (!selectedVisitorId) return [];
+  const sessionsQuery = useQuery({
+    queryKey: ["analytics-sessions", effectiveVisitorId],
+    enabled: !!effectiveVisitorId,
+    queryFn: async (): Promise<SessionRow[]> => {
+      if (!effectiveVisitorId) return EMPTY_SESSIONS;
+
       const { data, error } = await supabase
         .from("chat_sessions")
         .select("id,visitor_id,created_at,page_url,residence_custom_id,lang")
-        .eq("visitor_id", selectedVisitorId)
+        .eq("visitor_id", effectiveVisitorId)
         .order("created_at", { ascending: false })
         .limit(200);
 
       if (error) throw error;
       return (data ?? []) as SessionRow[];
     },
-    enabled: !!selectedVisitorId,
   });
+
+  const sessions = sessionsQuery.data ?? EMPTY_SESSIONS;
 
   const filteredSessions = useMemo(() => {
     const q = sessionSearch.trim().toLowerCase();
-    if (!q) return sessions ?? [];
-    return (sessions ?? []).filter((s) => {
+    if (!q) return sessions;
+
+    return sessions.filter((s) => {
       return (
         s.id.toLowerCase().includes(q) ||
         (s.page_url ?? "").toLowerCase().includes(q) ||
@@ -186,122 +183,43 @@ export default function ChatAnalyticsPage() {
     });
   }, [sessions, sessionSearch]);
 
-  useEffect(() => {
-    // If visitor changes, clear session selection
-    setSelectedSessionId("");
-  }, [selectedVisitorId]);
+  // ✅ derived “effective” session id:
+  // - if not “by session” => empty (no need to set state in an effect)
+  // - if by session and user didn’t pick => use first session
+  const effectiveSessionId = useMemo(() => {
+    if (!isBySession) return "";
+    return selectedSessionId || filteredSessions[0]?.id || "";
+  }, [isBySession, selectedSessionId, filteredSessions]);
 
-  // ---- Replay (messages + sources enrichment) ----
-  // const { data: replay, isLoading: loadingReplay } = useQuery({
-  //   queryKey: ["analytics-replay", selectedSessionId],
-  //   queryFn: async () => {
-  //     if (!selectedSessionId) return null;
+  const { data: replay, isLoading: loadingReplay } = useReplay(
+    supabase,
+    effectiveSessionId
+  );
 
-  //     const { data: msgs, error: msgErr } = await supabase
-  //       .from("chat_messages")
-  //       .select("id,session_id,visitor_id,role,content,created_at")
-  //       .eq("session_id", selectedSessionId)
-  //       .order("created_at", { ascending: true });
-
-  //     if (msgErr) throw msgErr;
-
-  //     const assistantIds = (msgs ?? [])
-  //       .filter((m: any) => m.role === "assistant")
-  //       .map((m: any) => m.id);
-
-  //     const sourcesRes = assistantIds.length
-  //       ? await supabase
-  //           .from("chat_message_sources")
-  //           .select(
-  //             "id,assistant_message_id,document_section_id,rank,score,source_type,snippet_used,created_at"
-  //           )
-  //           .in("assistant_message_id", assistantIds)
-  //           .order("rank", { ascending: true })
-  //       : { data: [] as any[], error: null as any };
-
-  //     if (sourcesRes.error) throw sourcesRes.error;
-
-  //     // Enrich sources with doc names (document_sections -> documents)
-  //     const sources = (sourcesRes.data ?? []) as SourceRow[];
-  //     const sectionIds = Array.from(
-  //       new Set(sources.map((s) => s.document_section_id))
-  //     );
-
-  //     const sectionToDoc = new Map<number, number>();
-  //     const docMap = new Map<number, string>();
-
-  //     if (sectionIds.length) {
-  //       const secRes = await supabase
-  //         .from("document_sections")
-  //         .select("id,document_id")
-  //         .in("id", sectionIds)
-  //         .limit(5000);
-
-  //       if (secRes.error) throw secRes.error;
-
-  //       (secRes.data ?? []).forEach((row: any) => {
-  //         sectionToDoc.set(row.id, row.document_id);
-  //       });
-
-  //       const docIds = Array.from(
-  //         new Set((secRes.data ?? []).map((r: any) => r.document_id))
-  //       );
-
-  //       if (docIds.length) {
-  //         const docsRes = await supabase
-  //           .from("documents")
-  //           .select("id,name")
-  //           .in("id", docIds)
-  //           .limit(5000);
-
-  //         if (docsRes.error) throw docsRes.error;
-  //         (docsRes.data ?? []).forEach((d: any) => docMap.set(d.id, d.name));
-  //       }
-
-  //       sources.forEach((s) => {
-  //         const docId = sectionToDoc.get(s.document_section_id);
-  //         s.doc_name = docId
-  //           ? docMap.get(docId) ?? "Unknown doc"
-  //           : "Unknown doc";
-  //       });
-  //     }
-
-  //     const sourcesByMsg = new Map<number, SourceRow[]>();
-  //     sources.forEach((s) => {
-  //       const arr = sourcesByMsg.get(s.assistant_message_id) ?? [];
-  //       arr.push(s);
-  //       sourcesByMsg.set(s.assistant_message_id, arr);
-  //     });
-
-  //     return {
-  //       messages: (msgs ?? []) as MessageRow[],
-  //       sourcesByMsg,
-  //     };
-  //   },
-  //   enabled: !!selectedSessionId,
-  // });
+  const { deleting: deletingVisitor, deleteVisitor } =
+    useDeleteVisitor(supabase);
 
   const refreshAll = async () => {
-    await Promise.all([refetchVisitors(), refetchSessions()]);
+    await Promise.all([visitorsQuery.refetch(), sessionsQuery.refetch()]);
   };
 
-  useEffect(() => {
-    if (!isBySession) setSelectedSessionId("");
-  }, [isBySession]);
+  const visitorOptions = useMemo(() => visitors.map((v) => v.id), [visitors]);
 
-  const visitorOptions = visitors.map((v) => v.id);
+  // ---- Full replay query (only when not by session) ----
+  const fullReplayQuery = useQuery({
+    queryKey: ["analytics-full-replay", effectiveVisitorId],
+    enabled: !!effectiveVisitorId && !isBySession,
+    queryFn: async (): Promise<{
+      sessions: SessionRow[];
+      messages: MessageRow[];
+      sourcesByMsg: Map<number, SourceRow[]>;
+    } | null> => {
+      if (!effectiveVisitorId) return null;
 
-  const { data: fullReplay, isLoading: loadingFullReplay } = useQuery({
-    queryKey: ["analytics-full-replay", selectedVisitorId],
-    enabled: !!selectedVisitorId && !isBySession,
-    queryFn: async () => {
-      if (!selectedVisitorId) return null;
-
-      // 1) sessions for visitor
       const { data: sess, error: sessErr } = await supabase
         .from("chat_sessions")
         .select("id,visitor_id,created_at,page_url,residence_custom_id,lang")
-        .eq("visitor_id", selectedVisitorId)
+        .eq("visitor_id", effectiveVisitorId)
         .order("created_at", { ascending: false })
         .limit(5000);
 
@@ -309,23 +227,22 @@ export default function ChatAnalyticsPage() {
 
       const sessionIds = (sess ?? []).map((s) => s.id);
 
-      // 2) messages for ALL sessions of this visitor
-      // (use visitor_id filter to be safe; session_id filter to keep it scoped)
-      const { data: msgs, error: msgErr } = sessionIds.length
+      const { data: msgsRaw, error: msgErr } = sessionIds.length
         ? await supabase
             .from("chat_messages")
             .select("id,session_id,visitor_id,role,content,created_at")
             .in("session_id", sessionIds)
-            .eq("visitor_id", selectedVisitorId)
+            .eq("visitor_id", effectiveVisitorId)
             .order("created_at", { ascending: true })
-        : { data: [] as any[], error: null as any };
+        : { data: [] as MessageRow[], error: null as unknown };
 
       if (msgErr) throw msgErr;
 
-      // 3) sources for assistant messages (with doc_name enrichment)
-      const assistantIds = (msgs ?? [])
-        .filter((m: any) => m.role === "assistant")
-        .map((m: any) => m.id);
+      const msgs = (msgsRaw ?? []) as MessageRow[];
+
+      const assistantIds = msgs
+        .filter((m) => m.role === "assistant")
+        .map((m) => m.id);
 
       const { data: rawSources, error: sourcesErr } = assistantIds.length
         ? await supabase
@@ -335,13 +252,13 @@ export default function ChatAnalyticsPage() {
             )
             .in("assistant_message_id", assistantIds)
             .order("rank", { ascending: true })
-        : { data: [] as any[], error: null as any };
+        : { data: [] as SourceRow[], error: null as unknown };
 
       if (sourcesErr) throw sourcesErr;
 
       const sources = (rawSources ?? []) as SourceRow[];
 
-      // 4) doc_name enrichment (document_sections -> documents)
+      // doc_name enrichment
       if (sources.length) {
         const sectionIds = Array.from(
           new Set(
@@ -351,11 +268,8 @@ export default function ChatAnalyticsPage() {
           )
         );
 
-        console.log(sources, "sources");
-        
-
         if (sectionIds.length) {
-          const { data: secRows, error: secErr } = await supabase
+          const { data: secRowsRaw, error: secErr } = await supabase
             .from("document_sections")
             .select("id,document_id")
             .in("id", sectionIds)
@@ -363,20 +277,16 @@ export default function ChatAnalyticsPage() {
 
           if (secErr) throw secErr;
 
-          const sectionToDoc = new Map<number, number>();
-          (secRows ?? []).forEach((row: any) =>
-            sectionToDoc.set(row.id, row.document_id)
-          );
+          const secRows = (secRowsRaw ?? []) as DocumentSectionRow[];
 
-          const docIds = Array.from(
-            new Set(
-              (secRows ?? []).map((r: any) => r.document_id).filter(Boolean)
-            )
-          );
+          const sectionToDoc = new Map<number, number>();
+          secRows.forEach((row) => sectionToDoc.set(row.id, row.document_id));
+
+          const docIds = Array.from(new Set(secRows.map((r) => r.document_id)));
 
           const docMap = new Map<number, string>();
           if (docIds.length) {
-            const { data: docRows, error: docErr } = await supabase
+            const { data: docRowsRaw, error: docErr } = await supabase
               .from("documents")
               .select("id,name")
               .in("id", docIds)
@@ -384,9 +294,8 @@ export default function ChatAnalyticsPage() {
 
             if (docErr) throw docErr;
 
-            (docRows ?? []).forEach((d: any) => docMap.set(d.id, d.name));
-            console.log(docRows, "docRows");
-            
+            const docRows = (docRowsRaw ?? []) as DocumentRow[];
+            docRows.forEach((d) => docMap.set(d.id, d.name));
           }
 
           sources.forEach((s) => {
@@ -398,7 +307,6 @@ export default function ChatAnalyticsPage() {
         }
       }
 
-      // 5) group sources by assistant message
       const sourcesByMsg = new Map<number, SourceRow[]>();
       sources.forEach((s) => {
         const arr = sourcesByMsg.get(s.assistant_message_id) ?? [];
@@ -408,19 +316,15 @@ export default function ChatAnalyticsPage() {
 
       return {
         sessions: (sess ?? []) as SessionRow[],
-        messages: (msgs ?? []) as MessageRow[],
+        messages: msgs,
         sourcesByMsg,
       };
     },
   });
 
   const bookTourTotals = useMemo(() => {
-    const rows = bookTourRows ?? [];
-
-    const submittedRows = rows.filter((r) => r.is_submitted === true);
-
+    const submittedRows = bookTourRows.filter((r) => r.is_submitted === true);
     const totalSubmitted = submittedRows.length;
-
     const dynamicSubmitted = submittedRows.filter(
       (r) => r.submitted_with_button === "dynamic"
     ).length;
@@ -428,11 +332,12 @@ export default function ChatAnalyticsPage() {
     return { totalSubmitted, dynamicSubmitted };
   }, [bookTourRows]);
 
-  console.log("test,", fullReplay);
-  
+  // ✅ Toggle handlers that avoid effects
+  const setModeBySession = () => setIsBySession(true);
+  const setModeFullConversation = () => setIsBySession(false);
+
   return (
     <div className="p-6 space-y-4">
-      {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold">Chat Analytics</h1>
@@ -451,17 +356,22 @@ export default function ChatAnalyticsPage() {
       </div>
 
       <div
-        className={`grid grid-cols-1  gap-4 ${
+        className={`grid grid-cols-1 gap-4 ${
           isBySession
             ? "lg:grid-cols-[380px_420px_1fr]"
             : "lg:grid-cols-[380px_220px_1fr]"
         } ease-in-out duration-300`}
       >
-        {/* ---------------- Visitors ---------------- */}
         <VisitorsSessions
-          loadingVisitors={loadingVisitors}
-          selectedVisitorId={selectedVisitorId}
-          setSelectedVisitorId={setSelectedVisitorId}
+          loadingVisitors={visitorsQuery.isLoading}
+          // show effective selection in UI
+          selectedVisitorId={effectiveVisitorId}
+          // store explicit user choice
+          setSelectedVisitorId={(id) => {
+            setSelectedVisitorId(id);
+            // also clear explicit session when visitor changes (optional)
+            setSelectedSessionId("");
+          }}
           visitorOptions={visitorOptions}
           visitorSearch={visitorSearch}
           setVisitorSearch={setVisitorSearch}
@@ -475,23 +385,22 @@ export default function ChatAnalyticsPage() {
           setFormFilter={setFormFilter}
           bookTourStatsByVisitor={bookTourStatsByVisitor}
         />
-        {/* ---------------- Sessions ---------------- */}
+
         <SessionsSection
           isBySession={isBySession}
           sessions={sessions}
           filteredSessions={filteredSessions}
-          selectedVisitorId={selectedVisitorId}
-          selectedSessionId={selectedSessionId}
+          selectedVisitorId={effectiveVisitorId}
+          // show effective selection in UI
+          selectedSessionId={effectiveSessionId}
+          // store explicit user choice
           setSelectedSessionId={setSelectedSessionId}
           sessionSearch={sessionSearch}
           setSessionSearch={setSessionSearch}
-          loadingSessions={loadingSessions}
+          loadingSessions={sessionsQuery.isLoading}
         />
 
-        {/* ---------------- Conversation ---------------- */}
-
         <Card className="h-[75vh] flex flex-col overflow-hidden">
-          {/* header */}
           <div className="p-2 border-b flex items-center justify-between">
             <div className="text-sm font-semibold">Conversation</div>
 
@@ -500,7 +409,7 @@ export default function ChatAnalyticsPage() {
                 size="sm"
                 variant={isBySession ? "default" : "ghost"}
                 className="h-8"
-                onClick={() => setIsBySession(true)}
+                onClick={setModeBySession}
               >
                 By session
               </Button>
@@ -508,25 +417,28 @@ export default function ChatAnalyticsPage() {
                 size="sm"
                 variant={!isBySession ? "default" : "ghost"}
                 className="h-8"
-                onClick={() => setIsBySession(false)}
+                onClick={setModeFullConversation}
               >
                 Full conversation
               </Button>
             </div>
           </div>
+
           <ConversationSection
-            selectedSessionId={selectedSessionId}
+            selectedSessionId={effectiveSessionId}
             isBySession={isBySession}
-            loadingReplay={isBySession ? loadingReplay : loadingFullReplay}
-            replay={isBySession ? replay : fullReplay}
+            loadingReplay={
+              isBySession ? loadingReplay : fullReplayQuery.isLoading
+            }
+            replay={isBySession ? replay : fullReplayQuery.data}
             setSelectedSessionId={setSelectedSessionId}
             filteredSessions={filteredSessions}
-            selectedVisitorId={selectedVisitorId}
+            selectedVisitorId={effectiveVisitorId}
           />
         </Card>
 
         <BotBookedToursSection
-          loadingBookTourRows={loadingBookTourRows}
+          loadingBookTourRows={bookTourFormsQuery.isLoading}
           bookTourTotals={bookTourTotals}
         />
       </div>
