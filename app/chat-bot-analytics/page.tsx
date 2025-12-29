@@ -14,7 +14,7 @@ import { SessionRow, VisitorRow, SourceRow, MessageRow } from "../types/types";
 import { Card } from "@/components/ui/card";
 import { useReplay } from "../hooks/useReplay";
 import { useDeleteVisitor } from "../hooks/useDeleteVisitor";
-import { DateRangePicker } from "./sections/DateRangePicker";
+// import { DateRangePicker } from "./sections/DateRangePicker";
 
 type FormFilter = "all" | "submitted" | "not_submitted";
 
@@ -51,7 +51,7 @@ export default function ChatAnalyticsPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<string>("");
 
   // Search
-  const [visitorSearch, setVisitorSearch] = useState("");
+  // const [visitorSearch, setVisitorSearch] = useState("");
   const [sessionSearch, setSessionSearch] = useState("");
 
   const [formFilter, setFormFilter] = useState<FormFilter>("all");
@@ -63,19 +63,25 @@ export default function ChatAnalyticsPage() {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
 
+  // ⭐ NEW: independent date range for "Booked Tours by Date"
+  const [bookedStart, setBookedStart] = useState<string>("");
+  const [bookedEnd, setBookedEnd] = useState<string>("");
+
   // ---- Visitors (pulled from DB based on date) ----
   const visitorsQuery = useQuery({
     queryKey: ["analytics-visitors", visitorPage, startDate, endDate],
-    queryFn: async (): Promise<VisitorRow[]> => {
+    queryFn: async (): Promise<{
+      visitors: VisitorRow[];
+      totalCount: number | null;
+    }> => {
       const from = 0;
       const to = visitorPage * PAGE_SIZE + (PAGE_SIZE - 1);
 
       let query = supabase
         .from("visitors")
-        .select("id,created_at")
+        .select("id,created_at", { count: "exact" }) // 👈 ask Supabase for total count
         .order("created_at", { ascending: false });
 
-      // apply date range on created_at at DB level
       if (startDate) {
         query = query.gte("created_at", startDate);
       }
@@ -83,15 +89,23 @@ export default function ChatAnalyticsPage() {
         query = query.lte("created_at", `${endDate} 23:59:59`);
       }
 
-      const { data, error } = await query.range(from, to);
+      const { data, error, count } = await query.range(from, to);
 
       if (error) throw error;
-      return (data ?? []) as VisitorRow[];
+
+      return {
+        visitors: (data ?? []) as VisitorRow[],
+        totalCount: count ?? null,
+      };
     },
   });
 
   // ✅ stable reference
-  const visitors = visitorsQuery.data ?? EMPTY_VISITORS;
+  const visitors = visitorsQuery.data?.visitors ?? EMPTY_VISITORS;
+  const totalVisitors = visitorsQuery.data?.totalCount ?? null;
+
+  const hasMoreVisitors =
+    totalVisitors !== null && visitors.length < totalVisitors;
 
   // ✅ derived “effective” visitor id
   const effectiveVisitorId = useMemo(
@@ -158,10 +172,10 @@ export default function ChatAnalyticsPage() {
 
   // ---- Filter visitors list in UI (search + form filter only) ----
   const filteredVisitors = visitors.filter((v) => {
-    const q = visitorSearch.trim().toLowerCase();
+    // const q = visitorSearch.trim().toLowerCase();
 
     // search by visitor id
-    if (q && !v.id.toLowerCase().includes(q)) return false;
+    // if (q && !v.id.toLowerCase().includes(q)) return false;
 
     // submission filter
     const stats = bookTourStatsByVisitor.get(v.id);
@@ -222,15 +236,59 @@ export default function ChatAnalyticsPage() {
   const { deleting: deletingVisitor, deleteVisitor } =
     useDeleteVisitor(supabase);
 
+  // ⭐ NEW: Booked tours across ALL visitors by date (independent from visitorsQuery)
+  const bookedToursByDateQuery = useQuery({
+    queryKey: ["booked-tours-by-date", bookedStart, bookedEnd],
+    queryFn: async (): Promise<VisitorFormRow[]> => {
+      let query = supabase
+        .from("visitor_forms")
+        .select("visitor_id,is_submitted,submitted_with_button,submitted_at")
+        .eq("form_type", "chat_bot_book_a_tour")
+        .eq("is_submitted", true); // only real submissions
+
+      if (bookedStart) {
+        query = query.gte("submitted_at", bookedStart);
+      }
+      if (bookedEnd) {
+        query = query.lte("submitted_at", `${bookedEnd} 23:59:59`);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      return (data ?? []) as VisitorFormRow[];
+    },
+  });
+
+  // ⭐ NEW: aggregations for booked tours by date
+  const bookedByDateStats = useMemo(() => {
+    const rows = bookedToursByDateQuery.data ?? [];
+
+    let total = 0;
+    let dynamic = 0;
+    const byDay: Record<string, number> = {};
+
+    for (const r of rows) {
+      if (!r.submitted_at) continue;
+      const day = r.submitted_at.slice(0, 10); // yyyy-mm-dd
+      byDay[day] = (byDay[day] ?? 0) + 1;
+      total++;
+      if (r.submitted_with_button === "dynamic") dynamic++;
+    }
+
+    return { total, dynamic, byDay };
+  }, [bookedToursByDateQuery.data]);
+
   const refreshAll = async () => {
     await Promise.all([
       visitorsQuery.refetch(),
       sessionsQuery.refetch(),
       bookTourFormsQuery.refetch(),
+      bookedToursByDateQuery.refetch(), // ⭐ NEW: refresh booked-tours-by-date
     ]);
   };
 
-  const visitorOptions = useMemo(() => visitors.map((v) => v.id), [visitors]);
+  // const visitorOptions = useMemo(() => visitors.map((v) => v.id), [visitors]);
 
   // ---- Full replay query (NOT date-filtered) ----
   const fullReplayQuery = useQuery({
@@ -374,17 +432,9 @@ export default function ChatAnalyticsPage() {
           </p>
         </div>
 
-        <div className="flex  items-end gap-2">
-          <DateRangePicker
-            startDate={startDate}
-            endDate={endDate}
-            onChange={(from, to) => {
-              setStartDate(from);
-              setEndDate(to);
-              // optional: reset page when date changes
-              setVisitorPage(0);
-            }}
-          />
+        <div className="flex items-end gap-2 flex-wrap">
+          {/* Main date range for visitors + per-visitor forms */}
+         
 
           <div className="flex gap-2">
             <Button variant="outline" className="gap-2" onClick={refreshAll}>
@@ -404,6 +454,11 @@ export default function ChatAnalyticsPage() {
       >
         <VisitorsSessions
           loadingVisitors={visitorsQuery.isLoading}
+          startDate={startDate}
+          endDate={endDate}
+          setStartDate={setStartDate}
+          setEndDate={setEndDate}
+          // effectiveVisitorId to
           // show effective selection in UI
           selectedVisitorId={effectiveVisitorId}
           // store explicit user choice
@@ -411,13 +466,14 @@ export default function ChatAnalyticsPage() {
             setSelectedVisitorId(id);
             setSelectedSessionId("");
           }}
-          visitorOptions={visitorOptions}
-          visitorSearch={visitorSearch}
-          setVisitorSearch={setVisitorSearch}
+          hasMoreVisitors={hasMoreVisitors}
+          // visitorOptions={visitorOptions}
+          // visitorSearch={visitorSearch}
+          // setVisitorSearch={setVisitorSearch}
           filteredVisitors={filteredVisitors}
           deleteVisitor={deleteVisitor}
-          setSelectedSessionId={setSelectedSessionId}
-          visitors={visitors}
+          // setSelectedSessionId={setSelectedSessionId}
+          // visitors={visitors}
           setVisitorPage={setVisitorPage}
           deleting={deletingVisitor}
           formFilter={formFilter}
@@ -475,9 +531,37 @@ export default function ChatAnalyticsPage() {
         </Card>
 
         <BotBookedToursSection
+          loading={bookTourFormsQuery.isLoading}
+          stats={{
+            total: bookTourTotals.totalSubmitted,
+            dynamic: bookTourTotals.dynamicSubmitted,
+          }}
+          bookedEnd={bookedEnd}
+          bookedStart={bookedStart}
+          setBookedEnd={setBookedEnd}
+          setBookedStart={setBookedStart}
+          title="Book a Tour: Loaded visitors"
+        />
+
+        <BotBookedToursSection
+          loading={bookedToursByDateQuery.isLoading}
+          stats={{
+            total: bookedByDateStats.total,
+            dynamic: bookedByDateStats.dynamic,
+          }}
+          bookedEnd={bookedEnd}
+          bookedStart={bookedStart}
+          setBookedEnd={setBookedEnd}
+          setBookedStart={setBookedStart}
+          showDatePicker={true}
+          title="Booked Tours by Date"
+        />
+        {/* </Card> */}
+
+        {/* <BotBookedToursSection
           loadingBookTourRows={bookTourFormsQuery.isLoading}
           bookTourTotals={bookTourTotals}
-        />
+        /> */}
       </div>
     </div>
   );

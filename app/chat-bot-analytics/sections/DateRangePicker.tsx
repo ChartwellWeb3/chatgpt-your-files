@@ -51,8 +51,8 @@ export function DateRangePicker({ startDate, endDate, onChange }: Props) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="gap-8 group h-12">
-          <div className="flex flex-col items-start">
+        <Button variant="outline" className="gap-8 group h-12 w-full">
+          <div className="flex flex-col items-start justify-between">
             <span className="text-[11px] uppercase tracking-wide text-muted-foreground group-hover:text-white">
               Date range
             </span>

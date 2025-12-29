@@ -1,11 +1,12 @@
-import { Loader2, Search, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+// import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { fmtDate } from "@/app/helpers/fmtDate";
 import { pill } from "@/components/ui/pill";
 import { Check } from "lucide-react";
 import { useState } from "react";
+import { DateRangePicker } from "./DateRangePicker";
 
 type VisitorLite = { id: string; created_at: string };
 
@@ -23,15 +24,15 @@ interface VisitorsProps {
   selectedVisitorId: string;
   setSelectedVisitorId: (id: string) => void;
 
-  visitorOptions: string[];
+  // visitorOptions: string[];
 
-  visitorSearch: string;
-  setVisitorSearch: (search: string) => void;
+  // visitorSearch: string;
+  // setVisitorSearch: (search: string) => void;
 
   filteredVisitors: VisitorLite[];
-  visitors: VisitorLite[];
+  // visitors: VisitorLite[];
 
-  setSelectedSessionId: (id: string) => void;
+  // setSelectedSessionId: (id: string) => void;
   setVisitorPage: (updater: (prev: number) => number) => void;
 
   deleting: boolean;
@@ -41,28 +42,40 @@ interface VisitorsProps {
   formFilter: FormFilter;
   setFormFilter: (v: FormFilter) => void;
   loadingBookTourRows?: boolean;
+  hasMoreVisitors: boolean;
 
   // ✅ NEW: stats for chat_bot_book_a_tour per visitor
   bookTourStatsByVisitor: Map<string, BookATourStats>;
+
+  // ✅ NEW: date range for visitors
+  startDate: string;
+  endDate: string;
+  setStartDate: (date: string) => void;
+  setEndDate: (date: string) => void;
 }
 
 export const VisitorsSessions = ({
+  hasMoreVisitors,
   loadingVisitors,
   selectedVisitorId,
   setSelectedVisitorId,
-  visitorOptions,
-  visitorSearch,
-  setVisitorSearch,
+  // visitorOptions,
+  // visitorSearch,
+  // setVisitorSearch,
   filteredVisitors,
   deleteVisitor,
-  setSelectedSessionId,
-  visitors,
+  // setSelectedSessionId,
+  // visitors,
   setVisitorPage,
   deleting,
   formFilter,
   setFormFilter,
   loadingBookTourRows,
   bookTourStatsByVisitor,
+  startDate,
+  endDate,
+  setStartDate,
+  setEndDate,
 }: VisitorsProps) => {
   const [collapsed, setCollapsed] = useState(true);
   return (
@@ -71,7 +84,7 @@ export const VisitorsSessions = ({
         <Button
           variant="ghost"
           size="icon"
-          className="absolute top-2 right-2"
+          className="absolute top-0 right-0"
           onClick={() => setCollapsed((v) => !v)}
           aria-label={collapsed ? "Expand filters" : "Collapse filters"}
         >
@@ -85,6 +98,18 @@ export const VisitorsSessions = ({
           <>
             <div className="flex items-center justify-between gap-2">
               <div className="font-semibold text-sm">Visitors</div>
+              <DateRangePicker
+                // className="w-full"
+                startDate={startDate}
+                endDate={endDate}
+                onChange={(from, to) => {
+                  setStartDate(from);
+                  setEndDate(to);
+                  // optional: reset page when date changes
+                  setVisitorPage(() => 0);
+                }}
+              />
+
               <div className="flex items-center gap-2">
                 {loadingBookTourRows ? (
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -139,7 +164,7 @@ export const VisitorsSessions = ({
               </button>
             </div>
             {/* Dropdown */}
-            <div className="relative">
+            {/* <div className="relative">
               <select
                 className="w-full h-10 rounded-md border border-border bg-background px-3 pr-10 text-sm font-mono"
                 value={selectedVisitorId}
@@ -154,9 +179,9 @@ export const VisitorsSessions = ({
                   </option>
                 ))}
               </select>
-            </div>
+            </div> */}
             {/* Paste/search */}
-            <div className="relative">
+            {/* <div className="relative">
               <Search className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
               <Input
                 value={visitorSearch}
@@ -164,8 +189,8 @@ export const VisitorsSessions = ({
                 placeholder="Search visitor id…"
                 className="pl-9"
               />
-            </div>
-            <div className="flex gap-2">
+            </div> */}
+            {/* <div className="flex gap-2">
               <Button
                 variant="secondary"
                 className="w-full"
@@ -183,7 +208,7 @@ export const VisitorsSessions = ({
               <Button variant="outline" onClick={() => setVisitorSearch("")}>
                 Clear
               </Button>
-            </div>
+            </div> */}
           </>
         ) : (
           <div>
@@ -192,6 +217,10 @@ export const VisitorsSessions = ({
               <span className="font-medium">
                 {formFilter.replace("_", " ")}
               </span>
+              <div className="flex gap-1 mt-1 text-xs">
+                <span>{startDate ? `from ${startDate}` : ""}</span>
+                <span className="">{endDate ? `to ${endDate}` : ""}</span>
+              </div>
             </div>
           </div>
         )}
@@ -267,16 +296,18 @@ export const VisitorsSessions = ({
         )}
 
         <div className="pt-2">
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => setVisitorPage((p) => p + 1)}
-            disabled={loadingVisitors}
-          >
-            Load more
-          </Button>
+          {hasMoreVisitors && (
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setVisitorPage((p) => p + 1)}
+              disabled={loadingVisitors}
+            >
+              Load more
+            </Button>
+          )}
           <div className="text-xs text-muted-foreground mt-2 text-center">
-            Showing {visitors.length} visitors
+            Showing {filteredVisitors.length} visitors
           </div>
         </div>
       </div>
