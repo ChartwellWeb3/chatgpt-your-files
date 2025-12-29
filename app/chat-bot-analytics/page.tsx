@@ -14,6 +14,7 @@ import { SessionRow, VisitorRow, SourceRow, MessageRow } from "../types/types";
 import { Card } from "@/components/ui/card";
 import { useReplay } from "../hooks/useReplay";
 import { useDeleteVisitor } from "../hooks/useDeleteVisitor";
+import { DateRangePicker } from "./sections/DateRangePicker";
 
 type FormFilter = "all" | "submitted" | "not_submitted";
 
@@ -58,28 +59,41 @@ export default function ChatAnalyticsPage() {
   // Toggle conversation mode
   const [isBySession, setIsBySession] = useState(true);
 
-  // ---- Visitors (load more) ----
+  // Date range filter (used to pull visitors + forms from DB)
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+
+  // ---- Visitors (pulled from DB based on date) ----
   const visitorsQuery = useQuery({
-    queryKey: ["analytics-visitors", visitorPage],
+    queryKey: ["analytics-visitors", visitorPage, startDate, endDate],
     queryFn: async (): Promise<VisitorRow[]> => {
       const from = 0;
       const to = visitorPage * PAGE_SIZE + (PAGE_SIZE - 1);
 
-      const { data, error } = await supabase
+      let query = supabase
         .from("visitors")
         .select("id,created_at")
-        .order("created_at", { ascending: false })
-        .range(from, to);
+        .order("created_at", { ascending: false });
+
+      // apply date range on created_at at DB level
+      if (startDate) {
+        query = query.gte("created_at", startDate);
+      }
+      if (endDate) {
+        query = query.lte("created_at", `${endDate} 23:59:59`);
+      }
+
+      const { data, error } = await query.range(from, to);
 
       if (error) throw error;
       return (data ?? []) as VisitorRow[];
     },
   });
 
-  // ✅ stable reference (no “?? []” creating new array each render)
+  // ✅ stable reference
   const visitors = visitorsQuery.data ?? EMPTY_VISITORS;
 
-  // ✅ derived “effective” visitor id: if user didn’t pick yet, use first visitor
+  // ✅ derived “effective” visitor id
   const effectiveVisitorId = useMemo(
     () => selectedVisitorId || visitors[0]?.id || "",
     [selectedVisitorId, visitors]
@@ -87,16 +101,26 @@ export default function ChatAnalyticsPage() {
 
   const visitorIds = useMemo(() => visitors.map((v) => v.id), [visitors]);
 
-  // ---- Forms / booked tours per visitor ----
+  // ---- Forms / booked tours per visitor (date-filtered by submitted_at) ----
   const bookTourFormsQuery = useQuery({
-    queryKey: ["analytics-visitor-forms", visitorIds],
+    queryKey: ["analytics-visitor-forms", visitorIds, startDate, endDate],
     enabled: visitorIds.length > 0,
     queryFn: async (): Promise<VisitorFormRow[]> => {
-      const { data, error } = await supabase
+      const base = supabase
         .from("visitor_forms")
         .select("visitor_id,is_submitted,submitted_with_button,submitted_at")
         .in("visitor_id", visitorIds)
         .eq("form_type", "chat_bot_book_a_tour");
+
+      let query = base;
+      if (startDate) {
+        query = query.gte("submitted_at", startDate);
+      }
+      if (endDate) {
+        query = query.lte("submitted_at", `${endDate} 23:59:59`);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return (data ?? []) as VisitorFormRow[];
@@ -132,23 +156,24 @@ export default function ChatAnalyticsPage() {
     return map;
   }, [bookTourRows]);
 
-  // Filter visitors list in UI
-  const filteredVisitors = useMemo(() => {
+  // ---- Filter visitors list in UI (search + form filter only) ----
+  const filteredVisitors = visitors.filter((v) => {
     const q = visitorSearch.trim().toLowerCase();
 
-    return visitors.filter((v) => {
-      if (q && !v.id.toLowerCase().includes(q)) return false;
+    // search by visitor id
+    if (q && !v.id.toLowerCase().includes(q)) return false;
 
-      const stats = bookTourStatsByVisitor.get(v.id);
-      const isSubmitted = !!stats?.submitted;
+    // submission filter
+    const stats = bookTourStatsByVisitor.get(v.id);
+    const isSubmitted = !!stats?.submitted;
 
-      if (formFilter === "submitted") return isSubmitted;
-      if (formFilter === "not_submitted") return !isSubmitted;
-      return true;
-    });
-  }, [visitors, visitorSearch, formFilter, bookTourStatsByVisitor]);
+    if (formFilter === "submitted") return isSubmitted;
+    if (formFilter === "not_submitted") return !isSubmitted;
 
-  // ---- Sessions for selected visitor ----
+    return true;
+  });
+
+  // ---- Sessions for selected visitor (NOT date-filtered) ----
   const sessionsQuery = useQuery({
     queryKey: ["analytics-sessions", effectiveVisitorId],
     enabled: !!effectiveVisitorId,
@@ -183,9 +208,7 @@ export default function ChatAnalyticsPage() {
     });
   }, [sessions, sessionSearch]);
 
-  // ✅ derived “effective” session id:
-  // - if not “by session” => empty (no need to set state in an effect)
-  // - if by session and user didn’t pick => use first session
+  // ✅ derived “effective” session id
   const effectiveSessionId = useMemo(() => {
     if (!isBySession) return "";
     return selectedSessionId || filteredSessions[0]?.id || "";
@@ -200,12 +223,16 @@ export default function ChatAnalyticsPage() {
     useDeleteVisitor(supabase);
 
   const refreshAll = async () => {
-    await Promise.all([visitorsQuery.refetch(), sessionsQuery.refetch()]);
+    await Promise.all([
+      visitorsQuery.refetch(),
+      sessionsQuery.refetch(),
+      bookTourFormsQuery.refetch(),
+    ]);
   };
 
   const visitorOptions = useMemo(() => visitors.map((v) => v.id), [visitors]);
 
-  // ---- Full replay query (only when not by session) ----
+  // ---- Full replay query (NOT date-filtered) ----
   const fullReplayQuery = useQuery({
     queryKey: ["analytics-full-replay", effectiveVisitorId],
     enabled: !!effectiveVisitorId && !isBySession,
@@ -347,11 +374,24 @@ export default function ChatAnalyticsPage() {
           </p>
         </div>
 
-        <div className="flex gap-2">
-          <Button variant="outline" className="gap-2" onClick={refreshAll}>
-            <RefreshCcw className="h-4 w-4" />
-            Refresh
-          </Button>
+        <div className="flex  items-end gap-2">
+          <DateRangePicker
+            startDate={startDate}
+            endDate={endDate}
+            onChange={(from, to) => {
+              setStartDate(from);
+              setEndDate(to);
+              // optional: reset page when date changes
+              setVisitorPage(0);
+            }}
+          />
+
+          <div className="flex gap-2">
+            <Button variant="outline" className="gap-2" onClick={refreshAll}>
+              <RefreshCcw className="h-4 w-4" />
+              Refresh
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -369,7 +409,6 @@ export default function ChatAnalyticsPage() {
           // store explicit user choice
           setSelectedVisitorId={(id) => {
             setSelectedVisitorId(id);
-            // also clear explicit session when visitor changes (optional)
             setSelectedSessionId("");
           }}
           visitorOptions={visitorOptions}
@@ -391,9 +430,7 @@ export default function ChatAnalyticsPage() {
           sessions={sessions}
           filteredSessions={filteredSessions}
           selectedVisitorId={effectiveVisitorId}
-          // show effective selection in UI
           selectedSessionId={effectiveSessionId}
-          // store explicit user choice
           setSelectedSessionId={setSelectedSessionId}
           sessionSearch={sessionSearch}
           setSessionSearch={setSessionSearch}
