@@ -3,8 +3,9 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fmtDate } from "@/app/helpers/fmtDate";
 import { SessionRow, MessageRow, SourceRow } from "@/app/types/types";
+import { Copy, Check } from "lucide-react";
 import { useState } from "react";
-// import { sources } from "next/dist/compiled/webpack/webpack";
+
 interface ConversationProps {
   selectedSessionId: string;
   loadingReplay: boolean;
@@ -24,12 +25,32 @@ export const ConversationSection = ({
   selectedSessionId,
   loadingReplay,
   replay,
-  // setSelectedSessionId,
-  // filteredSessions,
+
   selectedVisitorId,
   isBySession,
 }: ConversationProps) => {
   const [showSources, setShowSources] = useState(false);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+
+  async function copyToClipboard(text: string) {
+    // Modern
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    // Fallback
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+  }
+
   function downloadTxt(filename: string, content: string) {
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -53,7 +74,7 @@ export const ConversationSection = ({
       .join("\n----------------------------------------\n\n");
   }
 
-//   console.log(sources);
+  //   console.log(sources);
 
   return (
     <div className=" bg-card/40 overflow-hidden flex flex-col h-[75vh]">
@@ -140,8 +161,40 @@ export const ConversationSection = ({
                     ].join(" ")}
                   >
                     <div className="flex items-center justify-between gap-3 text-xs opacity-80 mb-2">
-                      <span className="uppercase">{m.role}</span>
-                      <span>{fmtDate(m.created_at)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="uppercase">{m.role}</span>
+                        <span>{fmtDate(m.created_at)}</span>
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-7 px-2"
+                        onClick={async () => {
+                          try {
+                            await copyToClipboard(m.content ?? "");
+                            setCopiedId(m.id);
+                            window.setTimeout(
+                              () =>
+                                setCopiedId((prev) =>
+                                  prev === m.id ? null : prev
+                                ),
+                              1200
+                            );
+                          } catch {}
+                        }}
+                      >
+                        {copiedId === m.id ? (
+                          <>
+                            <Check className="h-3.5 w-3.5 mr-1" /> Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5 mr-1" /> Copy
+                          </>
+                        )}
+                      </Button>
                     </div>
 
                     <div className="text-sm whitespace-pre-wrap leading-relaxed">
