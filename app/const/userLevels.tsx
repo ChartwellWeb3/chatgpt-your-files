@@ -16,4 +16,5 @@ export const LEVEL1_ALLOWED_PREFIXES = [
   { name: "Chatbot Content Management", path: "/chatbot-content-management" },
   { name: "Chat Bot Analytics", path: "/chat-bot-analytics" },
   { name: "User Data Tracker", path: "/user-data-tracker" },
+  { name: "API", path: "/api" },
 ];
