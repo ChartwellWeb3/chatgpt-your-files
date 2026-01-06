@@ -28,49 +28,49 @@ interface ConversationProps {
   botMode?: string;
 }
 
-async function analyzeConversation(payload: any) {
-  const res = await fetch("/api/analytics/satisfaction", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+// async function analyzeConversation(payload: any) {
+//   const res = await fetch("/api/analytics/satisfaction", {
+//     method: "POST",
+//     headers: { "Content-Type": "application/json" },
+//     body: JSON.stringify(payload),
+//   });
 
-  const contentType = res.headers.get("content-type") || "";
-  const raw = await res.text();
+//   const contentType = res.headers.get("content-type") || "";
+//   const raw = await res.text();
 
-  // Helpful debugging
-  if (!res.ok) {
-    throw new Error(
-      `API ${res.status} ${res.statusText}. Body starts with: ${raw.slice(
-        0,
-        120
-      )}`
-    );
-  }
+//   // Helpful debugging
+//   if (!res.ok) {
+//     throw new Error(
+//       `API ${res.status} ${res.statusText}. Body starts with: ${raw.slice(
+//         0,
+//         120
+//       )}`
+//     );
+//   }
 
-  // If we accidentally got HTML, it’s almost always 404/redirect/middleware
-  if (raw.trim().startsWith("<!DOCTYPE") || contentType.includes("text/html")) {
-    throw new Error(
-      `Expected JSON but got HTML. Check route path/middleware. Body starts with: ${raw.slice(
-        0,
-        120
-      )}`
-    );
-  }
+//   // If we accidentally got HTML, it’s almost always 404/redirect/middleware
+//   if (raw.trim().startsWith("<!DOCTYPE") || contentType.includes("text/html")) {
+//     throw new Error(
+//       `Expected JSON but got HTML. Check route path/middleware. Body starts with: ${raw.slice(
+//         0,
+//         120
+//       )}`
+//     );
+//   }
 
-  // Prefer parsing from raw (more reliable)
-  let data: any;
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    throw new Error(
-      `Response was not valid JSON. Body starts with: ${raw.slice(0, 120)}`
-    );
-  }
+//   // Prefer parsing from raw (more reliable)
+//   let data: any;
+//   try {
+//     data = JSON.parse(raw);
+//   } catch {
+//     throw new Error(
+//       `Response was not valid JSON. Body starts with: ${raw.slice(0, 120)}`
+//     );
+//   }
 
-  if (!data?.ok) throw new Error(data?.error || "Analysis failed");
-  return data.analysis;
-}
+//   if (!data?.ok) throw new Error(data?.error || "Analysis failed");
+//   return data.analysis;
+// }
 
 export const ConversationSection = ({
   selectedSessionId,
@@ -78,22 +78,22 @@ export const ConversationSection = ({
   replay,
   selectedVisitorId,
   isBySession,
-  lang,
-  pageUrl,
-  residenceId,
-  botMode,
+  // lang,
+  // pageUrl,
+  // residenceId,
+  // botMode,
 }: ConversationProps) => {
   const [showSources, setShowSources] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
-  const [analysisLoading, setAnalysisLoading] = useState(false);
-  const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<null | {
-    prompt_adherence_1_to_10: number;
-    user_satisfaction_1_to_10: number;
-    one_line_improvement: string;
-    summary: string;
-  }>(null);
+  // const [analysisLoading, setAnalysisLoading] = useState(false);
+  // const [analysisError, setAnalysisError] = useState<string | null>(null);
+  // const [analysis, setAnalysis] = useState<null | {
+  //   prompt_adherence_1_to_10: number;
+  //   user_satisfaction_1_to_10: number;
+  //   one_line_improvement: string;
+  //   summary: string;
+  // }>(null);
 
   async function copyToClipboard(text: string) {
     if (navigator?.clipboard?.writeText) {
@@ -166,7 +166,7 @@ export const ConversationSection = ({
               Download TXT
             </Button>
 
-            <Button
+            {/* <Button
               className="w-full"
               disabled={!replay || analysisLoading}
               onClick={async () => {
@@ -207,7 +207,7 @@ export const ConversationSection = ({
               ) : (
                 "Analyze Satisfaction"
               )}
-            </Button>
+            </Button> */}
           </div>
         )}
 
@@ -233,11 +233,11 @@ export const ConversationSection = ({
           <div className="text-sm text-muted-foreground">No replay data.</div>
         ) : (
           <>
-            {analysisError ? (
+            {/* {analysisError ? (
               <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
                 {analysisError}
               </div>
-            ) : null}
+            ) : null} */}
 
             <div className="space-y-4">
               {replay.messages.map((m) => {
@@ -354,7 +354,7 @@ export const ConversationSection = ({
                 );
               })}
             </div>
-            {analysis ? (
+            {/* {analysis ? (
               <div className="mb-4 rounded-lg border border-border bg-background p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-semibold">Conversation QA</div>
@@ -408,7 +408,7 @@ export const ConversationSection = ({
                   <div className="text-sm">{analysis.summary}</div>
                 </div>
               </div>
-            ) : null}
+            ) : null} */}
           </>
         )}
       </div>
