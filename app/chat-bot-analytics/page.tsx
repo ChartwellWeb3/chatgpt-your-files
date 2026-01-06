@@ -236,6 +236,19 @@ export default function ChatAnalyticsPage() {
   const { deleting: deletingVisitor, deleteVisitor } =
     useDeleteVisitor(supabase);
 
+  const handleDeleteVisitor = async (visitorId: string) => {
+    const res = await deleteVisitor(visitorId);
+    if (!res.ok) return; // user cancelled
+
+    if (res.visitorId === effectiveVisitorId) {
+      setSelectedVisitorId("");
+      setSelectedSessionId("");
+    }
+
+    setVisitorPage(0);
+    await refreshAll();
+  };
+
   // ⭐ NEW: Booked tours across ALL visitors by date (independent from visitorsQuery)
   const bookedToursByDateQuery = useQuery({
     queryKey: ["booked-tours-by-date", bookedStart, bookedEnd],
@@ -434,7 +447,6 @@ export default function ChatAnalyticsPage() {
 
         <div className="flex items-end gap-2 flex-wrap">
           {/* Main date range for visitors + per-visitor forms */}
-         
 
           <div className="flex gap-2">
             <Button variant="outline" className="gap-2" onClick={refreshAll}>
@@ -471,7 +483,7 @@ export default function ChatAnalyticsPage() {
           // visitorSearch={visitorSearch}
           // setVisitorSearch={setVisitorSearch}
           filteredVisitors={filteredVisitors}
-          deleteVisitor={deleteVisitor}
+          deleteVisitor={handleDeleteVisitor}
           // setSelectedSessionId={setSelectedSessionId}
           // visitors={visitors}
           setVisitorPage={setVisitorPage}

@@ -1,27 +1,26 @@
-import { useState } from "react";
-
+import { useMutation } from "@tanstack/react-query";
 export function useDeleteVisitor(supabase: any) {
-  const [deleting, setDeleting] = useState(false);
+  const mutation = useMutation({
+    mutationFn: async (visitorId: string) => {
+      if (!visitorId) throw new Error("Visitor ID is required");
 
-  const deleteVisitor = async (visitorId: string) => {
-    if (!visitorId) return false;
+      const ok = window.confirm(
+        `Delete visitor ${visitorId} and ALL related sessions/messages/sources? This cannot be undone.`
+      );
+      if (!ok) return { ok: false as const, visitorId };
 
-    const ok = window.confirm(
-      `Delete visitor ${visitorId} and ALL related sessions/messages/sources? This cannot be undone.`
-    );
-    if (!ok) return false;
-
-    setDeleting(true);
-    try {
       const { error } = await supabase.rpc("admin_delete_visitor", {
         p_visitor_id: visitorId,
       });
       if (error) throw error;
-      return true;
-    } finally {
-      setDeleting(false);
-    }
-  };
 
-  return { deleting, deleteVisitor };
+      return { ok: true as const, visitorId };
+    },
+  });
+
+  return {
+    deleting: mutation.isPending,
+    deleteVisitor: mutation.mutateAsync,
+    error: mutation.error,
+  };
 }
