@@ -1,7 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { LEVEL3_ALLOWED_PREFIXES, LEVEL1_ALLOWED_PREFIXES, LEVEL2_ALLOWED_PREFIXES } from "./app/const/userLevels";
-
+import {
+  LEVEL3_ALLOWED_PREFIXES,
+  LEVEL1_ALLOWED_PREFIXES,
+  LEVEL2_ALLOWED_PREFIXES,
+} from "./app/const/userLevels";
 
 function isAllowedForLevel(pathname: string, level: { path: string }[]) {
   return level.some((link) =>
@@ -43,9 +46,10 @@ export async function proxy(request: NextRequest) {
   const isPublicRoute =
     path.startsWith("/login") ||
     path.startsWith("/auth") ||
-    path.startsWith("/verify-email") || 
-    path.startsWith("/not-authorized")
-    ;
+    path.startsWith("/verify-email") ||
+    path.startsWith("/not-authorized");
+  path.startsWith("/api/analytics");
+  path.startsWith("/api/auth");
 
   // Gate 1: Not logged in
   if (!user && !isPublicRoute) {
