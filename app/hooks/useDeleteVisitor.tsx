@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
-export function useDeleteVisitor(supabase: any) {
+import { SupabaseClient } from "@supabase/supabase-js";
+export function useDeleteVisitor(supabase: SupabaseClient) {
   const mutation = useMutation({
     mutationFn: async (visitorId: string) => {
       if (!visitorId) throw new Error("Visitor ID is required");
