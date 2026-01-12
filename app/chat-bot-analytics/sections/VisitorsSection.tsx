@@ -1,7 +1,7 @@
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 // import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
+import { Card, CardFooter, CardHeader } from "@/components/ui/card";
 import { fmtDate } from "@/app/helpers/fmtDate";
 import { pill } from "@/components/ui/pill";
 import { Check } from "lucide-react";
@@ -80,7 +80,7 @@ export const VisitorsSessions = ({
   const [collapsed, setCollapsed] = useState(true);
   return (
     <Card className="bg-card/40 overflow-hidden flex flex-col h-[75vh]">
-      <div className="p-4 border-b border-border space-y-3 relative">
+      <CardHeader className="p-4 border-b border-border space-y-3 relative">
         <Button
           variant="ghost"
           size="icon"
@@ -224,7 +224,7 @@ export const VisitorsSessions = ({
             </div>
           </div>
         )}
-      </div>
+      </CardHeader>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {loadingVisitors ? (
@@ -294,7 +294,8 @@ export const VisitorsSessions = ({
             );
           })
         )}
-
+      </div>
+      <CardFooter className="p-4 border-t border-border flex flex-col ">
         <div className="pt-2">
           {hasMoreVisitors && (
             <Button
@@ -306,11 +307,11 @@ export const VisitorsSessions = ({
               Load more
             </Button>
           )}
-          <div className="text-xs text-muted-foreground mt-2 text-center">
-            Showing {filteredVisitors.length} visitors
-          </div>
         </div>
-      </div>
+        <div className="text-xs text-muted-foreground mt-2 text-center">
+          Showing {filteredVisitors.length} visitors
+        </div>
+      </CardFooter>
     </Card>
   );
 };
