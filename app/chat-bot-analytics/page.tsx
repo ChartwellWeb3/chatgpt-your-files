@@ -14,6 +14,7 @@ import { SessionRow, VisitorRow, SourceRow, MessageRow } from "../types/types";
 import { Card } from "@/components/ui/card";
 import { useReplay } from "../hooks/useReplay";
 import { useDeleteVisitor } from "../hooks/useDeleteVisitor";
+import { useProfileLevel } from "../hooks/useProfileLevel";
 // import { DateRangePicker } from "./sections/DateRangePicker";
 
 type FormFilter = "all" | "submitted" | "not_submitted";
@@ -41,6 +42,8 @@ const EMPTY_FORMS: VisitorFormRow[] = [];
 
 export default function ChatAnalyticsPage() {
   const supabase = createClient();
+
+  const { isAdmin } = useProfileLevel();
 
   // Pagination for visitors
   const PAGE_SIZE = 50;
@@ -433,6 +436,7 @@ export default function ChatAnalyticsPage() {
   // ✅ Toggle handlers that avoid effects
   const setModeBySession = () => setIsBySession(true);
   const setModeFullConversation = () => setIsBySession(false);
+  // console.log(isAdmin);
 
   return (
     <div className="p-6 space-y-4">
@@ -479,6 +483,7 @@ export default function ChatAnalyticsPage() {
             setSelectedSessionId("");
           }}
           hasMoreVisitors={hasMoreVisitors}
+          isAdmin={isAdmin}
           // visitorOptions={visitorOptions}
           // visitorSearch={visitorSearch}
           // setVisitorSearch={setVisitorSearch}

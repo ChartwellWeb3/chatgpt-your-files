@@ -46,7 +46,7 @@ interface VisitorsProps {
 
   // ✅ NEW: stats for chat_bot_book_a_tour per visitor
   bookTourStatsByVisitor: Map<string, BookATourStats>;
-
+ isAdmin: boolean;
   // ✅ NEW: date range for visitors
   startDate: string;
   endDate: string;
@@ -66,6 +66,7 @@ export const VisitorsSessions = ({
   deleteVisitor,
   // setSelectedSessionId,
   // visitors,
+  isAdmin,
   setVisitorPage,
   deleting,
   formFilter,
@@ -271,7 +272,7 @@ export const VisitorsSessions = ({
                 </div>
 
                 {/* ✅ FIX: delete correct visitor + prevent selecting on click */}
-                <Button
+              {isAdmin && <Button
                   variant="destructive"
                   className="w-full mt-4"
                   onClick={(e) => {
@@ -287,9 +288,9 @@ export const VisitorsSessions = ({
                       Deleting…
                     </>
                   ) : (
-                    "Delete visitor + all data"
+                    "Delete visitor"
                   )}
-                </Button>
+                </Button>}
               </Card>
             );
           })

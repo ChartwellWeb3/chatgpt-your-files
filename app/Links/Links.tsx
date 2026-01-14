@@ -24,4 +24,8 @@ export const Links = [
     href: "/user-data-tracker",
     label: "User Data Tracker",
   },
+  {
+    href: "/team",
+    label: "Team Management",
+  }
 ];
