@@ -19,7 +19,7 @@ type Props = {
   onChange: (from: string, to: string) => void;
 };
 
-// FIX timezone shifting issue ⬇
+// FIX timezone shifting issue 
 function toLocalDate(dateString?: string): Date | undefined {
   if (!dateString) return undefined;
   const [y, m, d] = dateString.split("-").map(Number);
