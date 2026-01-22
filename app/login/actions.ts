@@ -116,11 +116,11 @@ export async function submitCredentials(formData: FormData) {
   const password = formData.get("password") as string;
   const mode = formData.get("mode") as string;
 
-  // if (!email.endsWith("@chartwell.com")) {
-  //   return {
-  //     error: "Access restricted to chartwell.com email addresses only.",
-  //   };
-  // }
+  if (!email.endsWith("@chartwell.com")) {
+    return {
+      error: "Access restricted to chartwell.com email addresses only.",
+    };
+  }
 
   if (mode === "signup") {
     // --- SIGN UP FLOW ---
