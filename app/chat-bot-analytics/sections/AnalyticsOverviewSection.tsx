@@ -19,6 +19,13 @@ type OverviewProps = {
   setEndDate: (date: string) => void;
   overviewCounts: OverviewCounts;
   formCompletionPct: number;
+  corporateSessions: number;
+  residenceSessions: number;
+  corporateSessionPct: number;
+  multiMessageVisitors: number;
+  multiMessageVisitorPct: number;
+  multiSessionMessageVisitors: number;
+  multiSessionMessageVisitorPct: number;
   topPages: ChartItem[];
   topResidences: ChartItem[];
   topLangs: ChartItem[];
@@ -31,6 +38,13 @@ export function AnalyticsOverviewSection({
   setEndDate,
   overviewCounts,
   // formCompletionPct,
+  corporateSessions,
+  residenceSessions,
+  corporateSessionPct,
+  multiMessageVisitors,
+  multiMessageVisitorPct,
+  multiSessionMessageVisitors,
+  multiSessionMessageVisitorPct,
   topPages,
   topResidences,
   topLangs,
@@ -58,14 +72,14 @@ export function AnalyticsOverviewSection({
           </div>
         </Card>
         <Card className="p-4">
-          <div className="text-xs text-muted-foreground">Sessions</div>
+          <div className="text-xs text-muted-foreground">Interactions</div>
           <div className="text-2xl font-semibold">
             {overviewCounts.sessions}
           </div>
         </Card>
         <Card className="p-4">
           <div className="text-xs text-muted-foreground">
-            Avg sessions per visitor
+            Avg interactions per visitor
           </div>
           <div className="text-2xl font-semibold">
             {(overviewCounts.visitors
@@ -82,6 +96,37 @@ export function AnalyticsOverviewSection({
           {/* <div className="text-xs text-muted-foreground mt-1">
             Completion: {formCompletionPct.toFixed(0)}%
           </div> */}
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs text-muted-foreground">
+            Corporate vs residence sessions
+          </div>
+          <div className="text-2xl font-semibold">
+            {corporateSessions} / {residenceSessions}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1">
+            Corporate {corporateSessionPct.toFixed(0)}%
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs text-muted-foreground">
+            Visitors with 2+ messages
+          </div>
+          <div className="text-2xl font-semibold">{multiMessageVisitors}</div>
+          <div className="text-xs text-muted-foreground mt-1">
+            {multiMessageVisitorPct.toFixed(0)}% of visitors
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs text-muted-foreground">
+            Visitors with messages in 2+ interactions
+          </div>
+          <div className="text-2xl font-semibold">
+            {multiSessionMessageVisitors}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1">
+            {multiSessionMessageVisitorPct.toFixed(0)}% of visitors
+          </div>
         </Card>
       </div>
 
