@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/app/utils/supabase/server";
 
-function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export async function POST(req: Request) {
   const supabase = await createServerClient();
   const {
@@ -24,19 +20,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
-  let day = todayIsoDate();
-  try {
-    const body = await req.json();
-    if (typeof body?.day === "string" && body.day.length >= 10) {
-      day = body.day.slice(0, 10);
-    }
-  } catch {
-    // ignore invalid body
-  }
-
   const { error: refreshErr } = await supabase.rpc(
-    "refresh_chat_common_words",
-    { p_day: day }
+    "refresh_chat_common_words"
   );
 
   if (refreshErr) {
@@ -46,5 +31,5 @@ export async function POST(req: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, day });
+  return NextResponse.json({ ok: true });
 }

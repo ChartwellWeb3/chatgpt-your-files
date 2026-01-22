@@ -59,12 +59,6 @@ export default function ChatAnalyticsOverviewPage() {
   // const [bookedStart, setBookedStart] = useState<string>("");
   // const [bookedEnd, setBookedEnd] = useState<string>("");
 
-  const wordDay = useMemo(() => {
-    if (endDate) return endDate;
-    if (startDate) return startDate;
-    return new Date().toISOString().slice(0, 10);
-  }, [startDate, endDate]);
-
   const overviewSummaryQuery = useQuery({
     queryKey: ["analytics-overview-summary", startDate, endDate],
     queryFn: async (): Promise<OverviewSummary> => {
@@ -95,12 +89,11 @@ export default function ChatAnalyticsOverviewPage() {
   });
 
   const commonWordsQuery = useQuery({
-    queryKey: ["analytics-common-words", wordDay],
+    queryKey: ["analytics-common-words"],
     queryFn: async (): Promise<CommonWordRow[]> => {
       const { data, error } = await supabase
         .from("chat_common_words")
         .select("word,freq,lang")
-        .eq("day", wordDay)
         .in("lang", ["en", "fr"])
         .order("freq", { ascending: false });
 
@@ -223,7 +216,6 @@ export default function ChatAnalyticsOverviewPage() {
       const res = await fetch("/api/analytics/refresh-common-words", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ day: wordDay }),
       });
       const data = await res.json();
       if (!res.ok || !data?.ok) {
@@ -337,7 +329,6 @@ export default function ChatAnalyticsOverviewPage() {
         isAdmin={isAdmin}
         refreshCommonWords={refreshCommonWords}
         refreshingWords={refreshingWords}
-        day={wordDay}
         loading={commonWordsQuery.isLoading}
         enWords={enWords}
         frWords={frWords}

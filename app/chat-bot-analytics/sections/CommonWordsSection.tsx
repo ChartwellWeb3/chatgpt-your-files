@@ -10,7 +10,6 @@ type CommonWord = {
 };
 
 type CommonWordsProps = {
-  day: string;
   loading: boolean;
   enWords: CommonWord[];
   frWords: CommonWord[];
@@ -42,7 +41,6 @@ function renderList(items: CommonWord[]) {
 }
 
 export function CommonWordsSection({
-  day,
   loading,
   enWords,
   frWords,
@@ -55,7 +53,6 @@ export function CommonWordsSection({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Common user words</h2>
-          <p className="text-xs text-muted-foreground">Day: {day}</p>
         </div>
         {isAdmin ? (
           <Button
