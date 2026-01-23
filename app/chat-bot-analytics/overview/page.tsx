@@ -258,6 +258,9 @@ export default function ChatAnalyticsOverviewPage() {
     () => stopwords.filter((row) => row.lang === "fr"),
     [stopwords],
   );
+  const stopwordSet = useMemo(() => {
+    return new Set(stopwords.map((row) => `${row.lang}:${row.word}`));
+  }, [stopwords]);
 
   const [stopwordError, setStopwordError] = useState<string | null>(null);
 
@@ -272,6 +275,7 @@ export default function ChatAnalyticsOverviewPage() {
       throw error;
     }
     await stopwordsQuery.refetch();
+    await refreshCommonWords();
   };
 
   const deleteStopword = async (id: number) => {
@@ -332,6 +336,8 @@ export default function ChatAnalyticsOverviewPage() {
         loading={commonWordsQuery.isLoading}
         enWords={enWords}
         frWords={frWords}
+        onAddStopword={addStopword}
+        stopwordSet={stopwordSet}
       />
       {refreshWordsError ? (
         <div className="text-sm text-destructive">{refreshWordsError}</div>

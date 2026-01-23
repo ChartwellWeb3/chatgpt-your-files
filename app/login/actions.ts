@@ -25,15 +25,15 @@
 //   if (mode === "signup") {
 //     // --- SIGN UP FLOW ---
 
-    // // 1. Sign up with Supabase
-    // const { error } = await supabase.auth.signUp({
-    //   email,
-    //   password,
-    //   options: {
-    //     // Crucial: This points to your route handler that prevents the "Bot Click" issue
-    //     emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm`,
-    //   },
-    // });
+// // 1. Sign up with Supabase
+// const { error } = await supabase.auth.signUp({
+//   email,
+//   password,
+//   options: {
+//     // Crucial: This points to your route handler that prevents the "Bot Click" issue
+//     emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm`,
+//   },
+// });
 
 //     if (error) return { error: error.message };
 
@@ -98,8 +98,6 @@
 // /** * SERVER ACTION: Sign Out
 //  */
 
-
-
 "use server";
 
 import { revalidatePath } from "next/cache";
@@ -116,11 +114,11 @@ export async function submitCredentials(formData: FormData) {
   const password = formData.get("password") as string;
   const mode = formData.get("mode") as string;
 
-  if (!email.endsWith("@chartwell.com")) {
-    return {
-      error: "Access restricted to chartwell.com email addresses only.",
-    };
-  }
+  // if (!email.endsWith("@chartwell.com")) {
+  //   return {
+  //     error: "Access restricted to chartwell.com email addresses only.",
+  //   };
+  // }
 
   if (mode === "signup") {
     // --- SIGN UP FLOW ---
@@ -150,7 +148,10 @@ export async function submitCredentials(formData: FormData) {
       options: { shouldCreateUser: false },
     });
 
-    if (otpError) return { error: otpError.message };
+    if (otpError) {
+      console.log("OTP ERROR:", otpError); // <- includes code/status
+      return { error: otpError.message };
+    }
 
     return { success: true };
   }
@@ -184,8 +185,6 @@ export async function verifyOtpCode(formData: FormData) {
   revalidatePath("/", "layout");
   redirect("/chat-bot-analytics");
 }
-
-
 
 export async function signOut() {
   const supabase = await createClient();
