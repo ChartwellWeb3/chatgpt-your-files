@@ -1,5 +1,6 @@
-import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 // import { Input } from "@/components/ui/input";
 import { Card, CardFooter, CardHeader } from "@/components/ui/card";
 import { fmtDate } from "@/app/helpers/fmtDate";
@@ -7,16 +8,42 @@ import { pill } from "@/components/ui/pill";
 import { Check } from "lucide-react";
 import { useState } from "react";
 import { DateRangePicker } from "./DateRangePicker";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 type VisitorLite = { id: string; created_at: string };
 
-type FormFilter = "all" | "submitted" | "not_submitted";
+type FilterOption =
+  | "all"
+  | "submitted"
+  | "not_submitted"
+  | "requested"
+  | "reviewed";
+type ReviewFilter = "all" | "requested" | "reviewed";
 
 type BookATourStats = {
   submitted: boolean; // at least one submitted row exists
   totalSubmissions: number; // count of rows for chat_bot_book_a_tour
   dynamicSubmissions: number; // submitted_with_button === "dynamic"
   lastSubmittedAt?: string | null;
+};
+
+type ReviewRequestLite = {
+  id: number;
+  status: "pending" | "reviewed" | "closed";
+  requester_email?: string | null;
+  requester_comment: string;
+  reviewer_comment: string | null;
+  created_at: string;
 };
 
 interface VisitorsProps {
@@ -39,14 +66,16 @@ interface VisitorsProps {
   deleteVisitor: (id: string) => void;
 
   // ✅ NEW: form filter controls
-  formFilter: FormFilter;
-  setFormFilter: (v: FormFilter) => void;
+  filterOption: FilterOption;
+  setFilterOption: (v: FilterOption) => void;
   loadingBookTourRows?: boolean;
   hasMoreVisitors: boolean;
 
   // ✅ NEW: stats for chat_bot_book_a_tour per visitor
   bookTourStatsByVisitor: Map<string, BookATourStats>;
- isAdmin: boolean;
+  reviewRequestsByVisitor: Map<string, ReviewRequestLite>;
+  onRequestReview: (visitorId: string, comment: string) => Promise<void>;
+  isAdmin: boolean;
   // ✅ NEW: date range for visitors
   startDate: string;
   endDate: string;
@@ -69,18 +98,85 @@ export const VisitorsSessions = ({
   isAdmin,
   setVisitorPage,
   deleting,
-  formFilter,
-  setFormFilter,
+  filterOption,
+  setFilterOption,
   loadingBookTourRows,
   bookTourStatsByVisitor,
+  reviewRequestsByVisitor,
+  onRequestReview,
   startDate,
   endDate,
   setStartDate,
   setEndDate,
 }: VisitorsProps) => {
   const [collapsed, setCollapsed] = useState(true);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewVisitorId, setReviewVisitorId] = useState<string | null>(null);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+
+  const openReviewModal = (visitorId: string) => {
+    setReviewVisitorId(visitorId);
+    setReviewComment("");
+    setReviewError(null);
+    setReviewOpen(true);
+  };
+
+  const submitReviewRequest = async () => {
+    if (!reviewVisitorId) return;
+    const comment = reviewComment.trim();
+    if (!comment) {
+      setReviewError("Please add a comment.");
+      return;
+    }
+    setReviewSubmitting(true);
+    setReviewError(null);
+    try {
+      await onRequestReview(reviewVisitorId, comment);
+      setReviewOpen(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Request failed.";
+      setReviewError(message);
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
   return (
     <Card className="bg-card/40 overflow-hidden flex flex-col h-[75vh]">
+      <AlertDialog open={reviewOpen} onOpenChange={setReviewOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Request review</AlertDialogTitle>
+            <AlertDialogDescription>
+              Add a short note explaining why this visitor needs review.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            placeholder="Add a comment for the reviewer..."
+            value={reviewComment}
+            onChange={(e) => setReviewComment(e.target.value)}
+            rows={4}
+          />
+          {reviewError ? (
+            <div className="text-sm text-destructive">{reviewError}</div>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={reviewSubmitting}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void submitReviewRequest();
+              }}
+              disabled={reviewSubmitting}
+            >
+              {reviewSubmitting ? "Sending..." : "Send request"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <CardHeader className="p-4 border-b border-border space-y-3 relative">
         <Button
           variant="ghost"
@@ -120,13 +216,17 @@ export const VisitorsSessions = ({
                 ) : null}
               </div>
             </div>
-            <div className="rounded-lg border border-border bg-background p-1 grid grid-cols-3 gap-1">
+            <div className="rounded-lg border border-border bg-background p-1 grid grid-cols-2 gap-1">
               <button
                 type="button"
-                onClick={() => setFormFilter("all")}
+                onClick={() => {
+                  setFilterOption("all");
+                  setVisitorPage(() => 0);
+                  setSelectedVisitorId("");
+                }}
                 className={[
                   "h-9 rounded-md text-sm font-medium transition",
-                  formFilter === "all"
+                  filterOption === "all"
                     ? "bg-primary text-primary-foreground shadow"
                     : "hover:bg-muted text-foreground",
                 ].join(" ")}
@@ -136,12 +236,16 @@ export const VisitorsSessions = ({
 
               <button
                 type="button"
-                onClick={() => setFormFilter("submitted")}
+                onClick={() => {
+                  setFilterOption("submitted");
+                  setVisitorPage(() => 0);
+                  setSelectedVisitorId("");
+                }}
                 disabled={!!loadingBookTourRows}
                 className={[
                   "h-9 rounded-md text-sm font-medium transition",
                   "disabled:opacity-50 disabled:pointer-events-none",
-                  formFilter === "submitted"
+                  filterOption === "submitted"
                     ? "bg-primary text-primary-foreground shadow"
                     : "hover:bg-muted text-foreground",
                 ].join(" ")}
@@ -151,17 +255,54 @@ export const VisitorsSessions = ({
 
               <button
                 type="button"
-                onClick={() => setFormFilter("not_submitted")}
+                onClick={() => {
+                  setFilterOption("not_submitted");
+                  setVisitorPage(() => 0);
+                  setSelectedVisitorId("");
+                }}
                 disabled={!!loadingBookTourRows}
                 className={[
                   "h-9 rounded-md text-sm font-medium transition",
                   "disabled:opacity-50 disabled:pointer-events-none",
-                  formFilter === "not_submitted"
+                  filterOption === "not_submitted"
                     ? "bg-primary text-primary-foreground shadow"
                     : "hover:bg-muted text-foreground",
                 ].join(" ")}
               >
                 Not submitted
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterOption("requested");
+                  setVisitorPage(() => 0);
+                  setSelectedVisitorId("");
+                }}
+                className={[
+                  "h-9 rounded-md text-sm font-medium transition",
+                  filterOption === "requested"
+                    ? "bg-primary text-primary-foreground shadow"
+                    : "hover:bg-muted text-foreground",
+                ].join(" ")}
+              >
+                Review requested
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterOption("reviewed");
+                  setVisitorPage(() => 0);
+                  setSelectedVisitorId("");
+                }}
+                className={[
+                  "h-9 rounded-md text-sm font-medium transition",
+                  filterOption === "reviewed"
+                    ? "bg-primary text-primary-foreground shadow"
+                    : "hover:bg-muted text-foreground",
+                ].join(" ")}
+              >
+                Reviewed
               </button>
             </div>
             {/* Dropdown */}
@@ -216,7 +357,7 @@ export const VisitorsSessions = ({
             <div className="text-xs text-muted-foreground">
               Filter:{" "}
               <span className="font-medium">
-                {formFilter.replace("_", " ")}
+                {filterOption.replace("_", " ")}
               </span>
               <div className="flex gap-1 mt-1 text-xs">
                 <span>{startDate ? `from ${startDate}` : ""}</span>
@@ -241,6 +382,9 @@ export const VisitorsSessions = ({
           filteredVisitors.map((v) => {
             const stats = bookTourStatsByVisitor.get(v.id);
             const submitted = !!stats?.submitted;
+            const review = reviewRequestsByVisitor.get(v.id);
+            const isPending = review?.status === "pending";
+            const isReviewed = review?.status === "reviewed";
 
             return (
               <Card
@@ -269,28 +413,66 @@ export const VisitorsSessions = ({
                   {stats?.lastSubmittedAt
                     ? pill(`last: ${fmtDate(stats.lastSubmittedAt)}`)
                     : null}
+                  {review
+                    ? pill(
+                        review.status === "reviewed"
+                          ? "reviewed"
+                          : "review requested",
+                        review.status === "reviewed" ? "ok" : "muted"
+                      )
+                    : null}
+                </div>
+
+                <div className="mt-3 flex items-center gap-2">
+                  {isPending && review ? (
+                    <Button variant="outline" className="w-full" asChild>
+                      <Link
+                        href={`/chat-bot-analytics/reviews?request_id=${review.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                      >
+                        Go to review
+                      </Link>
+                    </Button>
+                  ) : !isReviewed ? (
+                    <Button
+                      variant="secondary"
+                      className="w-full"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openReviewModal(v.id);
+                      }}
+                    >
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Request review
+                    </Button>
+                  ) : null}
                 </div>
 
                 {/* ✅ FIX: delete correct visitor + prevent selecting on click */}
-              {isAdmin && <Button
-                  variant="destructive"
-                  className="w-full mt-4"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    void deleteVisitor(v.id);
-                  }}
-                  disabled={deleting}
-                >
-                  {deleting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Deleting…
-                    </>
-                  ) : (
-                    "Delete visitor"
-                  )}
-                </Button>}
+                {isAdmin && (
+                  <Button
+                    variant="destructive"
+                    className="w-full mt-4"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void deleteVisitor(v.id);
+                    }}
+                    disabled={deleting}
+                  >
+                    {deleting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Deleting…
+                      </>
+                    ) : (
+                      "Delete visitor"
+                    )}
+                  </Button>
+                )}
               </Card>
             );
           })

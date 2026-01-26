@@ -7,7 +7,12 @@ import { SessionsSection } from "./SessionsSections";
 import { VisitorsSessions } from "./VisitorsSection";
 import type { MessageRow, SessionRow, SourceRow, VisitorRow } from "@/app/types/types";
 
-type FormFilter = "all" | "submitted" | "not_submitted";
+type FilterOption =
+  | "all"
+  | "submitted"
+  | "not_submitted"
+  | "requested"
+  | "reviewed";
 
 type BookATourStats = {
   submitted: boolean;
@@ -33,9 +38,21 @@ type ReplaySectionProps = {
   deleteVisitor: (id: string) => void;
   setVisitorPage: (updater: (prev: number) => number) => void;
   deleting: boolean;
-  formFilter: FormFilter;
-  setFormFilter: (v: FormFilter) => void;
+  filterOption: FilterOption;
+  setFilterOption: (v: FilterOption) => void;
   bookTourStatsByVisitor: Map<string, BookATourStats>;
+  reviewRequestsByVisitor: Map<
+    string,
+    {
+      id: number;
+      status: "pending" | "reviewed" | "closed";
+      requester_email?: string | null;
+      requester_comment: string;
+      reviewer_comment: string | null;
+      created_at: string;
+    }
+  >;
+  onRequestReview: (visitorId: string, comment: string) => Promise<void>;
   sessions: SessionRow[];
   filteredSessions: SessionRow[];
   selectedSessionId: string;
@@ -70,9 +87,11 @@ export function AnalyticsReplaySection({
   deleteVisitor,
   setVisitorPage,
   deleting,
-  formFilter,
-  setFormFilter,
+  filterOption,
+  setFilterOption,
   bookTourStatsByVisitor,
+  reviewRequestsByVisitor,
+  onRequestReview,
   sessions,
   filteredSessions,
   selectedSessionId,
@@ -107,10 +126,12 @@ export function AnalyticsReplaySection({
           deleteVisitor={deleteVisitor}
           setVisitorPage={setVisitorPage}
           deleting={deleting}
-          formFilter={formFilter}
-          setFormFilter={setFormFilter}
-          bookTourStatsByVisitor={bookTourStatsByVisitor}
-        />
+        filterOption={filterOption}
+        setFilterOption={setFilterOption}
+        bookTourStatsByVisitor={bookTourStatsByVisitor}
+        reviewRequestsByVisitor={reviewRequestsByVisitor}
+        onRequestReview={onRequestReview}
+      />
 
         <SessionsSection
           isBySession={isBySession}

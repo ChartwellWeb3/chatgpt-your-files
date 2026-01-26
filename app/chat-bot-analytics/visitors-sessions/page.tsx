@@ -10,8 +10,14 @@ import { useDeleteVisitor } from "../../hooks/useDeleteVisitor";
 import { useProfileLevel } from "../../hooks/useProfileLevel";
 import { AnalyticsReplaySection } from "../sections/AnalyticsReplaySection";
 import type { MessageRow, SessionRow, SourceRow, VisitorRow } from "../../types/types";
+import { useSearchParams } from "next/navigation";
 
-type FormFilter = "all" | "submitted" | "not_submitted";
+type FilterOption =
+  | "all"
+  | "submitted"
+  | "not_submitted"
+  | "requested"
+  | "reviewed";
 
 type VisitorFormRow = {
   visitor_id: string;
@@ -30,6 +36,20 @@ type BookATourStats = {
 type DocumentSectionRow = { id: number; document_id: number };
 
 type DocumentRow = { id: number; name: string };
+type ReviewRequestRow = {
+  id: number;
+  visitor_id: string;
+  session_id: string | null;
+  requester_id: string;
+  requester_email: string | null;
+  requester_comment: string;
+  status: "pending" | "reviewed" | "closed";
+  reviewer_id: string | null;
+  reviewer_email: string | null;
+  reviewer_comment: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+};
 
 const EMPTY_VISITORS: VisitorRow[] = [];
 const EMPTY_SESSIONS: SessionRow[] = [];
@@ -39,6 +59,7 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
   const supabase = createClient();
 
   const { isAdmin } = useProfileLevel();
+  const searchParams = useSearchParams();
 
   // Pagination for visitors
   const PAGE_SIZE = 50;
@@ -51,14 +72,17 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
   // Search
   const [sessionSearch, setSessionSearch] = useState("");
 
-  const [formFilter, setFormFilter] = useState<FormFilter>("all");
+  const [filterOption, setFilterOption] = useState<FilterOption>("all");
 
-  // Toggle conversation mode
-  const [isBySession, setIsBySession] = useState(true);
+  // Toggle conversation mode (seed from URL if provided)
+  const modeParam = searchParams.get("mode");
+  const [isBySession, setIsBySession] = useState(modeParam !== "full");
 
   // Date range filter (used to pull visitors + forms from DB)
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
+
+  const visitorIdFromUrl = searchParams.get("visitor_id") ?? "";
 
   // ---- Visitors (pulled from DB based on date) ----
   const visitorsQuery = useQuery({
@@ -102,11 +126,38 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
 
   // derived effective visitor id
   const effectiveVisitorId = useMemo(
-    () => selectedVisitorId || visitors[0]?.id || "",
-    [selectedVisitorId, visitors]
+    () => selectedVisitorId || visitorIdFromUrl || visitors[0]?.id || "",
+    [selectedVisitorId, visitorIdFromUrl, visitors]
   );
 
   const visitorIds = useMemo(() => visitors.map((v) => v.id), [visitors]);
+
+  const reviewRequestsQuery = useQuery({
+    queryKey: ["analytics-review-requests", visitorIds],
+    enabled: visitorIds.length > 0,
+    queryFn: async (): Promise<ReviewRequestRow[]> => {
+      const { data, error } = await supabase
+        .from("chat_review_requests")
+        .select(
+          "id,visitor_id,session_id,requester_id,requester_email,requester_comment,status,reviewer_id,reviewer_email,reviewer_comment,created_at,reviewed_at"
+        )
+        .in("visitor_id", visitorIds)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []) as ReviewRequestRow[];
+    },
+  });
+
+  const reviewRequestsByVisitor = useMemo(() => {
+    const map = new Map<string, ReviewRequestRow>();
+    (reviewRequestsQuery.data ?? []).forEach((row) => {
+      if (!map.has(row.visitor_id)) {
+        map.set(row.visitor_id, row);
+      }
+    });
+    return map;
+  }, [reviewRequestsQuery.data]);
 
   // ---- Forms / booked tours per visitor (date-filtered by submitted_at) ----
   const bookTourFormsQuery = useQuery({
@@ -167,11 +218,22 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
   const filteredVisitors = visitors.filter((v) => {
     const stats = bookTourStatsByVisitor.get(v.id);
     const isSubmitted = !!stats?.submitted;
+    const review = reviewRequestsByVisitor.get(v.id);
+    const isPending = review?.status === "pending";
+    const isReviewed = review?.status === "reviewed";
 
-    if (formFilter === "submitted") return isSubmitted;
-    if (formFilter === "not_submitted") return !isSubmitted;
-
-    return true;
+    switch (filterOption) {
+      case "submitted":
+        return isSubmitted;
+      case "not_submitted":
+        return !isSubmitted;
+      case "requested":
+        return isPending;
+      case "reviewed":
+        return isReviewed;
+      default:
+        return true;
+    }
   });
 
   // ---- Sessions for selected visitor (NOT date-filtered) ----
@@ -212,7 +274,11 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
   // derived effective session id
   const effectiveSessionId = useMemo(() => {
     if (!isBySession) return "";
-    return selectedSessionId || filteredSessions[0]?.id || "";
+    if (selectedSessionId) {
+      const exists = filteredSessions.some((s) => s.id === selectedSessionId);
+      if (exists) return selectedSessionId;
+    }
+    return filteredSessions[0]?.id || "";
   }, [isBySession, selectedSessionId, filteredSessions]);
 
   const { data: replay, isLoading: loadingReplay } = useReplay(
@@ -234,6 +300,26 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
 
     setVisitorPage(0);
     await refreshAll();
+  };
+
+  const requestReview = async (visitorId: string, comment: string) => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error("You must be logged in to request a review.");
+    }
+
+    const { error } = await supabase.from("chat_review_requests").insert({
+      visitor_id: visitorId,
+      requester_id: user.id,
+      requester_email: user.email ?? null,
+      requester_comment: comment,
+      status: "pending",
+    });
+
+    if (error) throw error;
+    await reviewRequestsQuery.refetch();
   };
 
   // Full replay query (NOT date-filtered)
@@ -354,7 +440,11 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
   });
 
   const refreshAll = async () => {
-    await Promise.all([visitorsQuery.refetch(), sessionsQuery.refetch()]);
+    await Promise.all([
+      visitorsQuery.refetch(),
+      sessionsQuery.refetch(),
+      reviewRequestsQuery.refetch(),
+    ]);
   };
 
   const replayData = isBySession ? replay : fullReplayQuery.data;
@@ -402,9 +492,11 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
         deleteVisitor={handleDeleteVisitor}
         setVisitorPage={setVisitorPage}
         deleting={deletingVisitor}
-        formFilter={formFilter}
-        setFormFilter={setFormFilter}
+        filterOption={filterOption}
+        setFilterOption={setFilterOption}
         bookTourStatsByVisitor={bookTourStatsByVisitor}
+        reviewRequestsByVisitor={reviewRequestsByVisitor}
+        onRequestReview={requestReview}
         sessions={sessions}
         filteredSessions={filteredSessions}
         selectedSessionId={effectiveSessionId}

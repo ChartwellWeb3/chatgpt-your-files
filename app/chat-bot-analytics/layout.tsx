@@ -4,6 +4,7 @@ import { AnalyticsSidebar } from "./sections/AnalyticsSidebar";
 const NAV_LINKS = [
   { href: "/chat-bot-analytics/overview", label: "Overview" },
   { href: "/chat-bot-analytics/visitors-sessions", label: "Visitors & Sessions" },
+  { href: "/chat-bot-analytics/reviews", label: "Reviews" },
 ];
 
 export default function ChatAnalyticsLayout({ children }: PropsWithChildren) {
