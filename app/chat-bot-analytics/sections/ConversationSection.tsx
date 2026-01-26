@@ -20,6 +20,7 @@ interface ConversationProps {
   filteredSessions: Array<SessionRow>;
   selectedVisitorId: string;
   isBySession: boolean;
+  compact?: boolean;
 
   // optional meta if you have it
   lang?: string;
@@ -78,6 +79,7 @@ export const ConversationSection = ({
   replay,
   selectedVisitorId,
   isBySession,
+  compact = false,
   // lang,
   // pageUrl,
   // residenceId,
@@ -133,7 +135,7 @@ export const ConversationSection = ({
   }
 
   return (
-    <div className=" bg-card/40 overflow-hidden flex flex-col h-[75vh]">
+    <div className={`bg-card/40 overflow-hidden flex flex-col ${compact ? "h-full" : "h-[75vh]"}`}>
       <div className="p-4 border-b border-border flex items-center justify-between gap-4">
         {isBySession ? (
           <div className="mt-2 text-xs text-muted-foreground">

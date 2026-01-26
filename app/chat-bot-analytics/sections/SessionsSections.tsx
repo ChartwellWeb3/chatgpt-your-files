@@ -15,6 +15,7 @@ interface SessionsProps {
   filteredSessions: Array<SessionRow> | undefined;
   loadingSessions: boolean;
   isBySession: boolean;
+  compact?: boolean;
 }
 export const SessionsSection = ({
     isBySession,
@@ -26,10 +27,11 @@ export const SessionsSection = ({
   setSessionSearch,
   filteredSessions,
   loadingSessions,
+  compact = false,
 }: SessionsProps) => {
   return (
     <Card
-      className={`rounded-xl border border-border bg-card/40 overflow-hidden flex flex-col h-[75vh] ${isBySession ? '' : 'bg-card/95 pointer-events-none opacity-30'}`}
+      className={`rounded-xl border border-border bg-card/40 overflow-hidden flex flex-col ${compact ? "h-full" : "h-[75vh]"} ${isBySession ? '' : 'bg-card/95 pointer-events-none opacity-30'}`}
     >
       <div className="p-4 border-b border-border space-y-3">
         <div className="flex items-center justify-between gap-2">
