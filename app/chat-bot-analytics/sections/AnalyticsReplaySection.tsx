@@ -108,8 +108,8 @@ export function AnalyticsReplaySection({
       <div
         className={`grid grid-cols-1 gap-4 ${
           isBySession
-            ? "lg:grid-cols-[380px_420px_1fr]"
-            : "lg:grid-cols-[380px_220px_1fr]"
+            ? "lg:grid-cols-[320px_360px_minmax(0,1fr)]"
+            : "lg:grid-cols-[320px_220px_minmax(0,1fr)]"
         } ease-in-out duration-300`}
       >
         <VisitorsSessions
