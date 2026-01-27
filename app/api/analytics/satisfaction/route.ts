@@ -29,6 +29,7 @@ Return JSON only with keys:
 
 Rules:
 - If you cannot infer, use "unknown" for sentiment.
+- Always write "improvement" and "summary" in English, even if the transcript is French.
 - improvement: short, actionable, one line.
 - summary: 2-3 short sentences.
 `.trim();
