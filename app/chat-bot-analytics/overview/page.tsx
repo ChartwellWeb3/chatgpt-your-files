@@ -30,6 +30,14 @@ type OverviewSummary = OverviewCounts & {
   multiSessionMessageVisitors: number;
 };
 
+type AiSummary = {
+  satisfied: number;
+  neutral: number;
+  angry: number;
+  avgScore: number;
+  total: number;
+};
+
 type CommonWordRow = {
   word: string;
   freq: number;
@@ -99,6 +107,26 @@ export default function ChatAnalyticsOverviewPage() {
 
       if (error) throw error;
       return (data ?? []) as CommonWordRow[];
+    },
+  });
+
+  const aiSummaryQuery = useQuery({
+    queryKey: ["analytics-ai-summary", startDate, endDate],
+    queryFn: async (): Promise<AiSummary> => {
+      const { data, error } = await supabase.rpc("analytics_ai_summary", {
+        p_start: startDate ? startDate : null,
+        p_end: endDate ? endDate : null,
+      });
+
+      if (error) throw error;
+      const summary = (data ?? {}) as AiSummary;
+      return {
+        satisfied: summary.satisfied ?? 0,
+        neutral: summary.neutral ?? 0,
+        angry: summary.angry ?? 0,
+        avgScore: summary.avgScore ?? 0,
+        total: summary.total ?? 0,
+      };
     },
   });
 
@@ -200,6 +228,7 @@ export default function ChatAnalyticsOverviewPage() {
       overviewSummaryQuery.refetch(),
       commonWordsQuery.refetch(),
       stopwordsQuery.refetch(),
+      aiSummaryQuery.refetch(),
       // bookedToursByDateQuery.refetch(),
     ]);
   };
@@ -327,6 +356,7 @@ export default function ChatAnalyticsOverviewPage() {
         topPages={overviewSummary.topPages}
         topResidences={overviewSummary.topResidences}
         topLangs={overviewSummary.topLangs}
+        aiSummary={aiSummaryQuery.data ?? null}
       />
 
       <CommonWordsSection
