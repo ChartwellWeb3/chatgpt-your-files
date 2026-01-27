@@ -19,7 +19,10 @@ type FilterOption =
   | "submitted"
   | "not_submitted"
   | "requested"
-  | "reviewed";
+  | "reviewed"
+  | "ai_satisfied"
+  | "ai_neutral"
+  | "ai_angry";
 
 type BookATourStats = {
   submitted: boolean;
@@ -44,6 +47,7 @@ type ReplaySectionProps = {
   filteredVisitors: VisitorRow[];
   deleteVisitor: (id: string) => void;
   setVisitorPage: (updater: (prev: number) => number) => void;
+  onLoadMoreVisitors: () => void;
   deleting: boolean;
   filterOption: FilterOption;
   setFilterOption: (v: FilterOption) => void;
@@ -97,6 +101,7 @@ export function AnalyticsReplaySection({
   filteredVisitors,
   deleteVisitor,
   setVisitorPage,
+  onLoadMoreVisitors,
   deleting,
   filterOption,
   setFilterOption,
@@ -140,6 +145,7 @@ export function AnalyticsReplaySection({
           filteredVisitors={filteredVisitors}
           deleteVisitor={deleteVisitor}
           setVisitorPage={setVisitorPage}
+          onLoadMoreVisitors={onLoadMoreVisitors}
           deleting={deleting}
           filterOption={filterOption}
           setFilterOption={setFilterOption}

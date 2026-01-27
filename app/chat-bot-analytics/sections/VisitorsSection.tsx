@@ -38,7 +38,10 @@ type FilterOption =
   | "submitted"
   | "not_submitted"
   | "requested"
-  | "reviewed";
+  | "reviewed"
+  | "ai_satisfied"
+  | "ai_neutral"
+  | "ai_angry";
 type ReviewFilter = "all" | "requested" | "reviewed";
 
 type BookATourStats = {
@@ -72,6 +75,7 @@ interface VisitorsProps {
 
   // setSelectedSessionId: (id: string) => void;
   setVisitorPage: (updater: (prev: number) => number) => void;
+  onLoadMoreVisitors: () => void;
 
   deleting: boolean;
   deleteVisitor: (id: string) => void;
@@ -111,6 +115,7 @@ export const VisitorsSessions = ({
   // visitors,
   isAdmin,
   setVisitorPage,
+  onLoadMoreVisitors,
   deleting,
   filterOption,
   setFilterOption,
@@ -135,6 +140,16 @@ export const VisitorsSessions = ({
   const [expandedAnalysisIds, setExpandedAnalysisIds] = useState<Set<string>>(
     new Set()
   );
+  const filterLabels: Record<FilterOption, string> = {
+    all: "All",
+    submitted: "Submitted",
+    not_submitted: "Not submitted",
+    requested: "Review requested",
+    reviewed: "Reviewed",
+    ai_satisfied: "AI satisfied",
+    ai_neutral: "AI neutral",
+    ai_angry: "AI angry",
+  };
 
   const openReviewModal = (visitorId: string) => {
     setReviewVisitorId(visitorId);
@@ -336,6 +351,54 @@ export const VisitorsSessions = ({
               >
                 Reviewed
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterOption("ai_satisfied");
+                  setVisitorPage(() => 0);
+                  setSelectedVisitorId("");
+                }}
+                className={[
+                  "h-9 rounded-md text-sm font-medium transition",
+                  filterOption === "ai_satisfied"
+                    ? "bg-primary text-primary-foreground shadow"
+                    : "hover:bg-muted text-foreground",
+                ].join(" ")}
+              >
+                AI satisfied
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterOption("ai_neutral");
+                  setVisitorPage(() => 0);
+                  setSelectedVisitorId("");
+                }}
+                className={[
+                  "h-9 rounded-md text-sm font-medium transition",
+                  filterOption === "ai_neutral"
+                    ? "bg-primary text-primary-foreground shadow"
+                    : "hover:bg-muted text-foreground",
+                ].join(" ")}
+              >
+                AI neutral
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterOption("ai_angry");
+                  setVisitorPage(() => 0);
+                  setSelectedVisitorId("");
+                }}
+                className={[
+                  "h-9 rounded-md text-sm font-medium transition",
+                  filterOption === "ai_angry"
+                    ? "bg-primary text-primary-foreground shadow"
+                    : "hover:bg-muted text-foreground",
+                ].join(" ")}
+              >
+                AI angry
+              </button>
             </div>
             {/* Dropdown */}
             {/* <div className="relative">
@@ -389,7 +452,7 @@ export const VisitorsSessions = ({
             <div className="text-xs text-muted-foreground">
               Filter:{" "}
               <span className="font-medium">
-                {filterOption.replace("_", " ")}
+                {filterLabels[filterOption]}
               </span>
               <div className="flex gap-1 mt-1 text-xs">
                 <span>{startDate ? `from ${startDate}` : ""}</span>
@@ -628,7 +691,7 @@ export const VisitorsSessions = ({
             <Button
               variant="outline"
               className="w-full"
-              onClick={() => setVisitorPage((p) => p + 1)}
+              onClick={onLoadMoreVisitors}
               disabled={loadingVisitors}
             >
               Load more

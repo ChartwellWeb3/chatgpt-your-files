@@ -24,7 +24,10 @@ type FilterOption =
   | "submitted"
   | "not_submitted"
   | "requested"
-  | "reviewed";
+  | "reviewed"
+  | "ai_satisfied"
+  | "ai_neutral"
+  | "ai_angry";
 
 type VisitorFormRow = {
   visitor_id: string;
@@ -97,33 +100,44 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
 
   // ---- Visitors (pulled from DB based on date) ----
   const visitorsQuery = useQuery({
-    queryKey: ["analytics-visitors", visitorPage, startDate, endDate],
+    queryKey: [
+      "analytics-visitors",
+      visitorPage,
+      startDate,
+      endDate,
+      filterOption,
+    ],
     queryFn: async (): Promise<{
       visitors: VisitorRow[];
       totalCount: number | null;
     }> => {
-      const from = 0;
-      const to = visitorPage * PAGE_SIZE + (PAGE_SIZE - 1);
-
-      let query = supabase
-        .from("visitors")
-        .select("id,created_at", { count: "exact" })
-        .order("created_at", { ascending: false });
-
-      if (startDate) {
-        query = query.gte("created_at", startDate);
-      }
-      if (endDate) {
-        query = query.lte("created_at", `${endDate} 23:59:59`);
-      }
-
-      const { data, error, count } = await query.range(from, to);
+      const limit = (visitorPage + 1) * PAGE_SIZE;
+      const { data, error } = await supabase.rpc(
+        "analytics_visitors_filtered",
+        {
+          p_filter: filterOption,
+          p_start_date: startDate || null,
+          p_end_date: endDate ? `${endDate} 23:59:59` : null,
+          p_limit: limit,
+          p_offset: 0,
+        }
+      );
 
       if (error) throw error;
 
+      const rows = (data ?? []) as Array<{
+        id: string;
+        created_at: string;
+        total_count: number;
+      }>;
+      const totalCount = rows.length ? Number(rows[0].total_count) : 0;
+
       return {
-        visitors: (data ?? []) as VisitorRow[],
-        totalCount: count ?? null,
+        visitors: rows.map((row) => ({
+          id: row.id,
+          created_at: row.created_at,
+        })),
+        totalCount,
       };
     },
   });
@@ -260,27 +274,8 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
     return map;
   }, [bookTourRows]);
 
-  // ---- Filter visitors list in UI (search + form filter only) ----
-  const filteredVisitors = visitors.filter((v) => {
-    const stats = bookTourStatsByVisitor.get(v.id);
-    const isSubmitted = !!stats?.submitted;
-    const review = reviewRequestsByVisitor.get(v.id);
-    const isPending = review?.status === "pending";
-    const isReviewed = review?.status === "reviewed";
-
-    switch (filterOption) {
-      case "submitted":
-        return isSubmitted;
-      case "not_submitted":
-        return !isSubmitted;
-      case "requested":
-        return isPending;
-      case "reviewed":
-        return isReviewed;
-      default:
-        return true;
-    }
-  });
+  // ---- Visitors are already filtered by RPC ----
+  const filteredVisitors = visitors;
 
   // ---- Sessions for selected visitor (NOT date-filtered) ----
   const sessionsQuery = useQuery({
@@ -609,6 +604,7 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
         filteredVisitors={filteredVisitors}
         deleteVisitor={handleDeleteVisitor}
         setVisitorPage={setVisitorPage}
+        onLoadMoreVisitors={() => setVisitorPage((prev) => prev + 1)}
         deleting={deletingVisitor}
         filterOption={filterOption}
         setFilterOption={setFilterOption}
