@@ -20,9 +20,9 @@ export function AnalyticsSidebar({ links }: { links: AnalyticsLink[] }) {
             type="button"
             aria-label={open ? "Close analytics menu" : "Open analytics menu"}
             onClick={() => setOpen((value) => !value)}
-            className={`absolute left-2 top-5 z-50 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-md transition hover:bg-muted `}
+            className={`absolute left-2 top-4 z-50 flex items-center w-10 h-10  gap-2 justify-center rounded-full border border-border bg-accent text-foreground shadow-md transition hover:bg-muted text-sm `}
           >
-            <PanelLeft className="h-4 w-4" />
+            <PanelLeft className="h-5 w-5" />
           </button>
         )}
       </div>

@@ -9,7 +9,14 @@ import { useReplay } from "../../hooks/useReplay";
 import { useDeleteVisitor } from "../../hooks/useDeleteVisitor";
 import { useProfileLevel } from "../../hooks/useProfileLevel";
 import { AnalyticsReplaySection } from "../sections/AnalyticsReplaySection";
-import type { MessageRow, SessionRow, SourceRow, VisitorRow } from "../../types/types";
+import type {
+  ConversationAnalysis,
+  MessageRow,
+  SessionRow,
+  SourceRow,
+  VisitorRow,
+  VisitorAnalysisRow,
+} from "../../types/types";
 import { useSearchParams } from "next/navigation";
 
 type FilterOption =
@@ -74,6 +81,10 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
 
   const [filterOption, setFilterOption] = useState<FilterOption>("all");
 
+  const [analysisLoadingVisitorId, setAnalysisLoadingVisitorId] = useState<string | null>(null);
+  const [analysisError, setAnalysisError] = useState<{ visitorId: string; message: string } | null>(null);
+  const [analysisOverrides, setAnalysisOverrides] = useState<Map<string, VisitorAnalysisRow>>(new Map());
+
   // Toggle conversation mode (seed from URL if provided)
   const modeParam = searchParams.get("mode");
   const [isBySession, setIsBySession] = useState(modeParam !== "full");
@@ -131,6 +142,11 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
   );
 
   const visitorIds = useMemo(() => visitors.map((v) => v.id), [visitors]);
+  const analysisVisitorIds = useMemo(() => {
+    const set = new Set(visitorIds);
+    if (effectiveVisitorId) set.add(effectiveVisitorId);
+    return Array.from(set);
+  }, [visitorIds, effectiveVisitorId]);
 
   const reviewRequestsQuery = useQuery({
     queryKey: ["analytics-review-requests", visitorIds],
@@ -158,6 +174,36 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
     });
     return map;
   }, [reviewRequestsQuery.data]);
+
+  const analysesQuery = useQuery({
+    queryKey: ["analytics-visitor-analyses", analysisVisitorIds],
+    enabled: analysisVisitorIds.length > 0,
+    queryFn: async (): Promise<VisitorAnalysisRow[]> => {
+      const { data, error } = await supabase
+        .from("chat_visitor_analyses")
+        .select(
+          "id,visitor_id,last_message_at,source,model,prompt_version,satisfaction_1_to_10,sentiment,improvement,summary,created_at"
+        )
+        .in("visitor_id", analysisVisitorIds)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []) as VisitorAnalysisRow[];
+    },
+  });
+
+  const analysisByVisitor = useMemo(() => {
+    const map = new Map<string, VisitorAnalysisRow>();
+    (analysesQuery.data ?? []).forEach((row) => {
+      if (!map.has(row.visitor_id)) {
+        map.set(row.visitor_id, row);
+      }
+    });
+    analysisOverrides.forEach((row, visitorId) => {
+      map.set(visitorId, row);
+    });
+    return map;
+  }, [analysesQuery.data, analysisOverrides]);
 
   // ---- Forms / booked tours per visitor (date-filtered by submitted_at) ----
   const bookTourFormsQuery = useQuery({
@@ -322,6 +368,77 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
     await reviewRequestsQuery.refetch();
   };
 
+  const analyzeVisitor = async (
+    visitorId: string
+  ): Promise<ConversationAnalysis> => {
+    setAnalysisError(null);
+    setAnalysisLoadingVisitorId(visitorId);
+    try {
+      const res = await fetch("/api/analytics/satisfaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visitor_id: visitorId }),
+      });
+
+      const contentType = res.headers.get("content-type") || "";
+      const raw = await res.text();
+
+      if (!res.ok) {
+        throw new Error(
+          `API ${res.status} ${res.statusText}. Body starts with: ${raw.slice(
+            0,
+            120
+          )}`
+        );
+      }
+
+      if (
+        raw.trim().startsWith("<!DOCTYPE") ||
+        contentType.includes("text/html")
+      ) {
+        throw new Error(
+          `Expected JSON but got HTML. Check route path/middleware. Body starts with: ${raw.slice(
+            0,
+            120
+          )}`
+        );
+      }
+
+      let data: any;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        throw new Error(
+          `Response was not valid JSON. Body starts with: ${raw.slice(0, 120)}`
+        );
+      }
+
+      if (!data?.ok) throw new Error(data?.error || "Analysis failed");
+
+      const analysis = data.analysis as ConversationAnalysis;
+      const row = data.row as VisitorAnalysisRow | null;
+
+      if (row) {
+        setAnalysisOverrides((prev) => {
+          const next = new Map(prev);
+          next.set(visitorId, row);
+          return next;
+        });
+      }
+
+      await analysesQuery.refetch();
+      return analysis;
+    } catch (e: any) {
+      setAnalysisError({
+        visitorId,
+        message: e?.message ?? "Failed to analyze",
+      });
+      throw e;
+    } finally {
+      setAnalysisLoadingVisitorId(null);
+    }
+  };
+
   // Full replay query (NOT date-filtered)
   const fullReplayQuery = useQuery({
     queryKey: ["analytics-full-replay", effectiveVisitorId],
@@ -444,6 +561,7 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
       visitorsQuery.refetch(),
       sessionsQuery.refetch(),
       reviewRequestsQuery.refetch(),
+      analysesQuery.refetch(),
     ]);
   };
 
@@ -497,6 +615,10 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
         bookTourStatsByVisitor={bookTourStatsByVisitor}
         reviewRequestsByVisitor={reviewRequestsByVisitor}
         onRequestReview={requestReview}
+        analysisByVisitor={analysisByVisitor}
+        analysisLoadingVisitorId={analysisLoadingVisitorId}
+        analysisError={analysisError}
+        onAnalyzeVisitor={analyzeVisitor}
         sessions={sessions}
         filteredSessions={filteredSessions}
         selectedSessionId={effectiveSessionId}

@@ -5,7 +5,14 @@ import { Card } from "@/components/ui/card";
 import { ConversationSection } from "./ConversationSection";
 import { SessionsSection } from "./SessionsSections";
 import { VisitorsSessions } from "./VisitorsSection";
-import type { MessageRow, SessionRow, SourceRow, VisitorRow } from "@/app/types/types";
+import type {
+  MessageRow,
+  SessionRow,
+  SourceRow,
+  VisitorRow,
+  VisitorAnalysisRow,
+  ConversationAnalysis,
+} from "@/app/types/types";
 
 type FilterOption =
   | "all"
@@ -53,6 +60,10 @@ type ReplaySectionProps = {
     }
   >;
   onRequestReview: (visitorId: string, comment: string) => Promise<void>;
+  analysisByVisitor: Map<string, VisitorAnalysisRow>;
+  analysisLoadingVisitorId: string | null;
+  analysisError: { visitorId: string; message: string } | null;
+  onAnalyzeVisitor: (visitorId: string) => Promise<ConversationAnalysis>;
   sessions: SessionRow[];
   filteredSessions: SessionRow[];
   selectedSessionId: string;
@@ -92,6 +103,10 @@ export function AnalyticsReplaySection({
   bookTourStatsByVisitor,
   reviewRequestsByVisitor,
   onRequestReview,
+  analysisByVisitor,
+  analysisLoadingVisitorId,
+  analysisError,
+  onAnalyzeVisitor,
   sessions,
   filteredSessions,
   selectedSessionId,
@@ -126,12 +141,15 @@ export function AnalyticsReplaySection({
           deleteVisitor={deleteVisitor}
           setVisitorPage={setVisitorPage}
           deleting={deleting}
-        filterOption={filterOption}
-        setFilterOption={setFilterOption}
-        bookTourStatsByVisitor={bookTourStatsByVisitor}
-        reviewRequestsByVisitor={reviewRequestsByVisitor}
-        onRequestReview={onRequestReview}
-      />
+          filterOption={filterOption}
+          setFilterOption={setFilterOption}
+          bookTourStatsByVisitor={bookTourStatsByVisitor}
+          reviewRequestsByVisitor={reviewRequestsByVisitor}
+          onRequestReview={onRequestReview}
+          analysisByVisitor={analysisByVisitor}
+          analysisLoadingVisitorId={analysisLoadingVisitorId}
+          onAnalyzeVisitor={onAnalyzeVisitor}
+        />
 
         <SessionsSection
           isBySession={isBySession}
@@ -180,6 +198,15 @@ export function AnalyticsReplaySection({
             setSelectedSessionId={setSelectedSessionId}
             filteredSessions={filteredSessions}
             selectedVisitorId={selectedVisitorId}
+            isAdmin={isAdmin}
+            analysis={analysisByVisitor.get(selectedVisitorId) ?? null}
+            analysisLoading={analysisLoadingVisitorId === selectedVisitorId}
+            analysisError={
+              analysisError?.visitorId === selectedVisitorId
+                ? analysisError.message
+                : null
+            }
+            onAnalyze={onAnalyzeVisitor}
           />
         </Card>
       </div>

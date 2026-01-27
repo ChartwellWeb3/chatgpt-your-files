@@ -32,3 +32,24 @@ export type SourceRow = {
   created_at: string;
   doc_name?: string;
 };
+
+export type ConversationAnalysis = {
+  satisfaction_1_to_10: number;
+  sentiment: "satisfied" | "neutral" | "angry" | "unknown";
+  improvement: string;
+  summary: string;
+};
+
+export type VisitorAnalysisRow = {
+  id: number;
+  visitor_id: string;
+  last_message_at: string;
+  source: "auto" | "manual";
+  model: string;
+  prompt_version: string;
+  satisfaction_1_to_10: number;
+  sentiment: "satisfied" | "neutral" | "angry" | "unknown";
+  improvement: string;
+  summary: string;
+  created_at: string;
+};

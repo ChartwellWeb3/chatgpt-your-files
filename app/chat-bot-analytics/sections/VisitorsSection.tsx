@@ -1,13 +1,24 @@
-import { Loader2, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
+import {
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+  MessageSquare,
+  Sparkles,
+  Check,
+  Trash2,
+  ExternalLink,
+  Info,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 // import { Input } from "@/components/ui/input";
 import { Card, CardFooter, CardHeader } from "@/components/ui/card";
 import { fmtDate } from "@/app/helpers/fmtDate";
 import { pill } from "@/components/ui/pill";
-import { Check } from "lucide-react";
 import { useState } from "react";
 import { DateRangePicker } from "./DateRangePicker";
+import type { ConversationAnalysis, VisitorAnalysisRow } from "@/app/types/types";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -75,6 +86,9 @@ interface VisitorsProps {
   bookTourStatsByVisitor: Map<string, BookATourStats>;
   reviewRequestsByVisitor: Map<string, ReviewRequestLite>;
   onRequestReview: (visitorId: string, comment: string) => Promise<void>;
+  analysisByVisitor: Map<string, VisitorAnalysisRow>;
+  analysisLoadingVisitorId: string | null;
+  onAnalyzeVisitor: (visitorId: string) => Promise<ConversationAnalysis>;
   isAdmin: boolean;
   // ✅ NEW: date range for visitors
   startDate: string;
@@ -104,6 +118,9 @@ export const VisitorsSessions = ({
   bookTourStatsByVisitor,
   reviewRequestsByVisitor,
   onRequestReview,
+  analysisByVisitor,
+  analysisLoadingVisitorId,
+  onAnalyzeVisitor,
   startDate,
   endDate,
   setStartDate,
@@ -115,6 +132,9 @@ export const VisitorsSessions = ({
   const [reviewComment, setReviewComment] = useState("");
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [expandedAnalysisIds, setExpandedAnalysisIds] = useState<Set<string>>(
+    new Set()
+  );
 
   const openReviewModal = (visitorId: string) => {
     setReviewVisitorId(visitorId);
@@ -141,6 +161,18 @@ export const VisitorsSessions = ({
     } finally {
       setReviewSubmitting(false);
     }
+  };
+
+  const toggleAnalysis = (visitorId: string) => {
+    setExpandedAnalysisIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(visitorId)) {
+        next.delete(visitorId);
+      } else {
+        next.add(visitorId);
+      }
+      return next;
+    });
   };
   return (
     <Card className="bg-card/40 overflow-hidden flex flex-col h-[75vh]">
@@ -385,6 +417,7 @@ export const VisitorsSessions = ({
             const review = reviewRequestsByVisitor.get(v.id);
             const isPending = review?.status === "pending";
             const isReviewed = review?.status === "reviewed";
+            const analysis = analysisByVisitor.get(v.id);
 
             return (
               <Card
@@ -415,64 +448,175 @@ export const VisitorsSessions = ({
                     : null}
                   {review
                     ? pill(
-                        review.status === "reviewed"
+                      review.status === "reviewed"
                           ? "reviewed"
                           : "review requested",
-                        review.status === "reviewed" ? "ok" : "muted"
+                        review.status === "reviewed"
+                          ? "ok"
+                          : review.status === "pending"
+                            ? "warning"
+                            : "muted"
+                      )
+                    : null}
+                  {analysis
+                    ? pill(
+                        `AI ${analysis.satisfaction_1_to_10}/10`,
+                        analysis.satisfaction_1_to_10 >= 7 ? "ok" : "muted"
+                      )
+                    : null}
+                  {analysis
+                    ? pill(
+                        analysis.sentiment,
+                        analysis.sentiment === "satisfied"
+                          ? "ok"
+                          : analysis.sentiment === "angry"
+                            ? "danger"
+                            : analysis.sentiment === "neutral"
+                              ? "warning"
+                            : "muted"
                       )
                     : null}
                 </div>
 
                 <div className="mt-3 flex items-center gap-2">
                   {isPending && review ? (
-                    <Button variant="outline" className="w-full" asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      asChild
+                      title="Go to review"
+                      aria-label="Go to review"
+                    >
                       <Link
                         href={`/chat-bot-analytics/reviews?request_id=${review.id}`}
                         onClick={(e) => {
                           e.stopPropagation();
                         }}
                       >
-                        Go to review
+                        <ExternalLink className="h-4 w-4" />
                       </Link>
                     </Button>
                   ) : !isReviewed ? (
                     <Button
                       variant="secondary"
-                      className="w-full"
+                      size="icon"
+                      className="h-8 w-8"
+                      title="Request review"
+                      aria-label="Request review"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         openReviewModal(v.id);
                       }}
                     >
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      Request review
+                      <MessageSquare className="h-4 w-4" />
+                    </Button>
+                  ) : null}
+
+                  {analysis ? (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      title={
+                        expandedAnalysisIds.has(v.id)
+                          ? "Hide AI analysis"
+                          : "Show AI analysis"
+                      }
+                      aria-label={
+                        expandedAnalysisIds.has(v.id)
+                          ? "Hide AI analysis"
+                          : "Show AI analysis"
+                      }
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggleAnalysis(v.id);
+                      }}
+                    >
+                      {expandedAnalysisIds.has(v.id) ? (
+                        <X className="h-4 w-4" />
+                      ) : (
+                        <Info className="h-4 w-4" />
+                      )}
+                    </Button>
+                  ) : null}
+
+                  {isAdmin ? (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      title={analysis ? "Re-analyze AI" : "Analyze with AI"}
+                      aria-label={analysis ? "Re-analyze AI" : "Analyze with AI"}
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        try {
+                          await onAnalyzeVisitor(v.id);
+                        } catch {}
+                      }}
+                      disabled={analysisLoadingVisitorId === v.id}
+                    >
+                      {analysisLoadingVisitorId === v.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
+                    </Button>
+                  ) : null}
+
+                  {isAdmin ? (
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="h-8 w-8"
+                      title="Delete visitor"
+                      aria-label="Delete visitor"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void deleteVisitor(v.id);
+                      }}
+                      disabled={deleting}
+                    >
+                      {deleting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
                     </Button>
                   ) : null}
                 </div>
 
-                {/* ✅ FIX: delete correct visitor + prevent selecting on click */}
-                {isAdmin && (
-                  <Button
-                    variant="destructive"
-                    className="w-full mt-4"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      void deleteVisitor(v.id);
-                    }}
-                    disabled={deleting}
-                  >
-                    {deleting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        Deleting…
-                      </>
-                    ) : (
-                      "Delete visitor"
-                    )}
-                  </Button>
-                )}
+                {analysis && expandedAnalysisIds.has(v.id) ? (
+                  <div className="mt-3 rounded-md border border-border/60 bg-muted/20 p-3 text-xs space-y-2">
+                    <div className="font-semibold text-foreground">
+                      AI analysis
+                    </div>
+                    <div className="text-muted-foreground">
+                      Summary:{" "}
+                      <span className="text-foreground">{analysis.summary}</span>
+                    </div>
+                    <div className="text-muted-foreground">
+                      Improvement:{" "}
+                      <span className="text-foreground">
+                        {analysis.improvement}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-muted-foreground">
+                      <span>Model: {analysis.model}</span>
+                      <span>Source: {analysis.source}</span>
+                      <span>Prompt: {analysis.prompt_version}</span>
+                      <span>Analyzed: {fmtDate(analysis.created_at)}</span>
+                      <span>
+                        Last msg: {fmtDate(analysis.last_message_at)}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+
               </Card>
             );
           })
