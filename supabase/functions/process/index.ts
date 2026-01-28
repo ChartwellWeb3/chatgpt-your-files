@@ -6,10 +6,6 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
 Deno.serve(async (req) => {
-
-
-  console.log("started");
-  
   if (!supabaseUrl || !supabaseAnonKey) {
     return new Response(
       JSON.stringify({
@@ -89,15 +85,15 @@ Deno.serve(async (req) => {
     .from("document_sections")
     .insert(rows);
 
-  const { error } = await supabase.from("document_sections").insert(
-    processedMd.sections.map(({ content }) => ({
-      document_id,
-      content,
-    }))
-  );
+  // const { error } = await supabase.from("document_sections").insert(
+  //   processedMd.sections.map(({ content }) => ({
+  //     document_id,
+  //     content,
+  //   }))
+  // );
 
-  if (error || insErr) {
-    console.error(error);
+  if ( insErr) {
+    // console.error(error);
     console.error(insErr);
     return new Response(
       JSON.stringify({ error: "Failed to save document sections" }),
