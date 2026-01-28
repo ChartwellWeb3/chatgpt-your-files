@@ -3,7 +3,12 @@ import { pill } from "@/components/ui/pill";
 import { Loader2, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fmtDate } from "@/app/helpers/fmtDate";
-import { SessionRow, MessageRow, SourceRow } from "@/app/types/types";
+import {
+  SessionRow,
+  MessageRow,
+  SourceRow,
+  ConversationAnalysis,
+} from "@/app/types/types";
 import { useState } from "react";
 
 interface ConversationProps {
@@ -20,6 +25,12 @@ interface ConversationProps {
   filteredSessions: Array<SessionRow>;
   selectedVisitorId: string;
   isBySession: boolean;
+  compact?: boolean;
+  isAdmin?: boolean;
+  analysis?: ConversationAnalysis | null;
+  analysisLoading?: boolean;
+  analysisError?: string | null;
+  onAnalyze?: (visitorId: string) => Promise<ConversationAnalysis>;
 
   // optional meta if you have it
   lang?: string;
@@ -28,56 +39,18 @@ interface ConversationProps {
   botMode?: string;
 }
 
-// async function analyzeConversation(payload: any) {
-//   const res = await fetch("/api/analytics/satisfaction", {
-//     method: "POST",
-//     headers: { "Content-Type": "application/json" },
-//     body: JSON.stringify(payload),
-//   });
-
-//   const contentType = res.headers.get("content-type") || "";
-//   const raw = await res.text();
-
-//   // Helpful debugging
-//   if (!res.ok) {
-//     throw new Error(
-//       `API ${res.status} ${res.statusText}. Body starts with: ${raw.slice(
-//         0,
-//         120
-//       )}`
-//     );
-//   }
-
-//   // If we accidentally got HTML, it’s almost always 404/redirect/middleware
-//   if (raw.trim().startsWith("<!DOCTYPE") || contentType.includes("text/html")) {
-//     throw new Error(
-//       `Expected JSON but got HTML. Check route path/middleware. Body starts with: ${raw.slice(
-//         0,
-//         120
-//       )}`
-//     );
-//   }
-
-//   // Prefer parsing from raw (more reliable)
-//   let data: any;
-//   try {
-//     data = JSON.parse(raw);
-//   } catch {
-//     throw new Error(
-//       `Response was not valid JSON. Body starts with: ${raw.slice(0, 120)}`
-//     );
-//   }
-
-//   if (!data?.ok) throw new Error(data?.error || "Analysis failed");
-//   return data.analysis;
-// }
-
 export const ConversationSection = ({
   selectedSessionId,
   loadingReplay,
   replay,
   selectedVisitorId,
   isBySession,
+  compact = false,
+  isAdmin = false,
+  analysis = null,
+  analysisLoading = false,
+  analysisError = null,
+  onAnalyze,
   // lang,
   // pageUrl,
   // residenceId,
@@ -85,15 +58,6 @@ export const ConversationSection = ({
 }: ConversationProps) => {
   const [showSources, setShowSources] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
-
-  // const [analysisLoading, setAnalysisLoading] = useState(false);
-  // const [analysisError, setAnalysisError] = useState<string | null>(null);
-  // const [analysis, setAnalysis] = useState<null | {
-  //   prompt_adherence_1_to_10: number;
-  //   user_satisfaction_1_to_10: number;
-  //   one_line_improvement: string;
-  //   summary: string;
-  // }>(null);
 
   async function copyToClipboard(text: string) {
     if (navigator?.clipboard?.writeText) {
@@ -133,7 +97,9 @@ export const ConversationSection = ({
   }
 
   return (
-    <div className=" bg-card/40 overflow-hidden flex flex-col h-[75vh]">
+    <div
+      className={`bg-card/40 overflow-hidden flex flex-col ${compact ? "h-full" : "h-[75vh]"}`}
+    >
       <div className="p-4 border-b border-border flex items-center justify-between gap-4">
         {isBySession ? (
           <div className="mt-2 text-xs text-muted-foreground">
@@ -166,48 +132,32 @@ export const ConversationSection = ({
               Download TXT
             </Button>
 
-            {/* <Button
-              className="w-full"
-              disabled={!replay || analysisLoading}
-              onClick={async () => {
-                if (!replay) return;
-
-                try {
-                  setAnalysisError(null);
-                  setAnalysisLoading(true);
-                  setAnalysis(null);
-
-                  const transcript = replay.messages.map((m, idx) => ({
-                    role: m.role as "user" | "assistant" | "system",
-                    content: m.content ?? "",
-                    index: idx,
-                  }));
-
-                  const result = await analyzeConversation({
-                    transcript,
-                    lang: lang ?? "unknown",
-                    page_url: pageUrl ?? "unknown",
-                    residence_id: residenceId ?? null,
-                    bot_mode: botMode ?? "unknown",
-                  });
-
-                  setAnalysis(result);
-                } catch (e: any) {
-                  setAnalysisError(e?.message ?? "Failed to analyze");
-                } finally {
-                  setAnalysisLoading(false);
+            {!isBySession && isAdmin ? (
+              <Button
+                className="w-full"
+                disabled={
+                  !replay ||
+                  analysisLoading ||
+                  !selectedVisitorId ||
+                  !onAnalyze
                 }
-              }}
-            >
-              {analysisLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Analyzing…
-                </>
-              ) : (
-                "Analyze Satisfaction"
-              )}
-            </Button> */}
+                onClick={async () => {
+                  if (!selectedVisitorId || !onAnalyze) return;
+                  try {
+                    await onAnalyze(selectedVisitorId);
+                  } catch {}
+                }}
+              >
+                {analysisLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Analyzing…
+                  </>
+                ) : (
+                  "Analyze Conversation"
+                )}
+              </Button>
+            ) : null}
           </div>
         )}
 
@@ -233,18 +183,81 @@ export const ConversationSection = ({
           <div className="text-sm text-muted-foreground">No replay data.</div>
         ) : (
           <>
-            {/* {analysisError ? (
+            {!isBySession && analysisError ? (
               <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
                 {analysisError}
               </div>
-            ) : null} */}
+            ) : null}
+
+            {!isBySession && analysis ? (
+              <div className="mb-4 rounded-lg border border-border bg-background p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold">
+                    Conversation analysis
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        await copyToClipboard(
+                          JSON.stringify(analysis, null, 2),
+                        );
+                      } catch {}
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5 mr-1" />
+                    Copy JSON
+                  </Button>
+                </div>
+
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-md border border-border/60 p-3">
+                    <div className="text-xs text-muted-foreground">
+                      Satisfaction
+                    </div>
+                    <div className="mt-1 text-2xl font-semibold">
+                      {analysis.satisfaction_1_to_10}/10
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border border-border/60 p-3">
+                    <div className="text-xs text-muted-foreground">
+                      Sentiment
+                    </div>
+                    <div className="mt-1 text-2xl font-semibold capitalize">
+                      {analysis.sentiment}
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border border-border/60 p-3">
+                    <div className="text-xs text-muted-foreground">Mode</div>
+                    <div className="mt-1 text-2xl font-semibold">Full</div>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <div className="text-xs text-muted-foreground mb-1">
+                    Improvement
+                  </div>
+                  <div className="text-sm">{analysis.improvement}</div>
+                </div>
+
+                <div className="mt-3">
+                  <div className="text-xs text-muted-foreground mb-1">
+                    Summary
+                  </div>
+                  <div className="text-sm">{analysis.summary}</div>
+                </div>
+              </div>
+            ) : null}
 
             <div className="space-y-4">
               {replay.messages.map((m) => {
                 const isUser = m.role === "user";
                 const sources =
                   m.role === "assistant"
-                    ? replay.sourcesByMsg.get(m.id) ?? []
+                    ? (replay.sourcesByMsg.get(m.id) ?? [])
                     : [];
 
                 return (
@@ -280,9 +293,9 @@ export const ConversationSection = ({
                               window.setTimeout(
                                 () =>
                                   setCopiedId((prev) =>
-                                    prev === m.id ? null : prev
+                                    prev === m.id ? null : prev,
                                   ),
-                                1200
+                                1200,
                               );
                             } catch {}
                           }}
@@ -354,61 +367,6 @@ export const ConversationSection = ({
                 );
               })}
             </div>
-            {/* {analysis ? (
-              <div className="mb-4 rounded-lg border border-border bg-background p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-semibold">Conversation QA</div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={async () => {
-                      try {
-                        await copyToClipboard(
-                          JSON.stringify(analysis, null, 2)
-                        );
-                      } catch {}
-                    }}
-                  >
-                    <Copy className="h-3.5 w-3.5 mr-1" />
-                    Copy JSON
-                  </Button>
-                </div>
-
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  <div className="rounded-md border border-border/60 p-3">
-                    <div className="text-xs text-muted-foreground">
-                      Prompt adherence
-                    </div>
-                    <div className="mt-1 text-2xl font-semibold">
-                      {analysis.prompt_adherence_1_to_10}/10
-                    </div>
-                  </div>
-
-                  <div className="rounded-md border border-border/60 p-3">
-                    <div className="text-xs text-muted-foreground">
-                      User satisfaction
-                    </div>
-                    <div className="mt-1 text-2xl font-semibold">
-                      {analysis.user_satisfaction_1_to_10}/10
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-3">
-                  <div className="text-xs text-muted-foreground mb-1">
-                    One-line improvement
-                  </div>
-                  <div className="text-sm">{analysis.one_line_improvement}</div>
-                </div>
-
-                <div className="mt-3">
-                  <div className="text-xs text-muted-foreground mb-1">
-                    Summary
-                  </div>
-                  <div className="text-sm">{analysis.summary}</div>
-                </div>
-              </div>
-            ) : null} */}
           </>
         )}
       </div>

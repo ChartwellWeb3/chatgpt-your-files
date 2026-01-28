@@ -2,6 +2,7 @@
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Check, Trash2 } from "lucide-react";
 
 type CommonWord = {
   word: string;
@@ -10,31 +11,63 @@ type CommonWord = {
 };
 
 type CommonWordsProps = {
-  day: string;
   loading: boolean;
   enWords: CommonWord[];
   frWords: CommonWord[];
   isAdmin: boolean;
   refreshingWords: boolean;
   refreshCommonWords: () => void;
+  onAddStopword: (word: string, lang: "en" | "fr") => Promise<void>;
+  stopwordSet: Set<string>;
 };
 
-function renderList(items: CommonWord[]) {
+function renderList(
+  items: CommonWord[],
+  isAdmin: boolean,
+  stopwordSet: Set<string>,
+  onAddStopword: (word: string, lang: "en" | "fr") => Promise<void>
+) {
   if (!items.length) {
     return <div className="text-sm text-muted-foreground">No data.</div>;
   }
 
   return (
-    <ol className="space-y-1 text-sm">
+    <ol className="text-sm divide-y divide-border/40">
       {items.map((item, idx) => (
         <li
           key={`${item.word}-${idx}`}
-          className="flex items-center justify-between gap-3"
+          className="flex items-center justify-between gap-3 py-2"
         >
           <span className="truncate">
             {idx + 1}. {item.word}
           </span>
-          <span className="text-xs text-muted-foreground">{item.freq}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground tabular-nums min-w-[2.5rem] text-right">
+              {item.freq}
+            </span>
+            {isAdmin ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                disabled={stopwordSet.has(`${item.lang}:${item.word}`)}
+                onClick={() =>
+                  onAddStopword(item.word, item.lang as "en" | "fr")
+                }
+                title={
+                  stopwordSet.has(`${item.lang}:${item.word}`)
+                    ? "Already a stopword"
+                    : "Add to stopwords"
+                }
+              >
+                {stopwordSet.has(`${item.lang}:${item.word}`) ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+              </Button>
+            ) : null}
+          </div>
         </li>
       ))}
     </ol>
@@ -42,20 +75,20 @@ function renderList(items: CommonWord[]) {
 }
 
 export function CommonWordsSection({
-  day,
   loading,
   enWords,
   frWords,
   refreshCommonWords,
   refreshingWords,
   isAdmin,
+  onAddStopword,
+  stopwordSet,
 }: CommonWordsProps) {
   return (
     <section id="analytics-common-words" className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Common user words</h2>
-          <p className="text-xs text-muted-foreground">Day: {day}</p>
         </div>
         {isAdmin ? (
           <Button
@@ -75,7 +108,7 @@ export function CommonWordsSection({
           {loading ? (
             <div className="text-sm text-muted-foreground">Loading…</div>
           ) : (
-            renderList(enWords)
+            renderList(enWords, isAdmin, stopwordSet, onAddStopword)
           )}
         </Card>
 
@@ -84,7 +117,7 @@ export function CommonWordsSection({
           {loading ? (
             <div className="text-sm text-muted-foreground">Loading…</div>
           ) : (
-            renderList(frWords)
+            renderList(frWords, isAdmin, stopwordSet, onAddStopword)
           )}
         </Card>
       </div>

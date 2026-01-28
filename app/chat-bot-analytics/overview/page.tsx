@@ -30,6 +30,14 @@ type OverviewSummary = OverviewCounts & {
   multiSessionMessageVisitors: number;
 };
 
+type AiSummary = {
+  satisfied: number;
+  neutral: number;
+  angry: number;
+  avgScore: number;
+  total: number;
+};
+
 type CommonWordRow = {
   word: string;
   freq: number;
@@ -59,22 +67,13 @@ export default function ChatAnalyticsOverviewPage() {
   // const [bookedStart, setBookedStart] = useState<string>("");
   // const [bookedEnd, setBookedEnd] = useState<string>("");
 
-  const wordDay = useMemo(() => {
-    if (endDate) return endDate;
-    if (startDate) return startDate;
-    return new Date().toISOString().slice(0, 10);
-  }, [startDate, endDate]);
-
   const overviewSummaryQuery = useQuery({
     queryKey: ["analytics-overview-summary", startDate, endDate],
     queryFn: async (): Promise<OverviewSummary> => {
-      const { data, error } = await supabase.rpc(
-        "analytics_overview_summary",
-        {
-          p_start: startDate ? startDate : null,
-          p_end: endDate ? endDate : null,
-        },
-      );
+      const { data, error } = await supabase.rpc("analytics_overview_summary", {
+        p_start: startDate ? startDate : null,
+        p_end: endDate ? endDate : null,
+      });
 
       if (error) throw error;
       const summary = (data ?? {}) as OverviewSummary;
@@ -95,17 +94,36 @@ export default function ChatAnalyticsOverviewPage() {
   });
 
   const commonWordsQuery = useQuery({
-    queryKey: ["analytics-common-words", wordDay],
+    queryKey: ["analytics-common-words"],
     queryFn: async (): Promise<CommonWordRow[]> => {
       const { data, error } = await supabase
         .from("chat_common_words")
         .select("word,freq,lang")
-        .eq("day", wordDay)
         .in("lang", ["en", "fr"])
         .order("freq", { ascending: false });
 
       if (error) throw error;
       return (data ?? []) as CommonWordRow[];
+    },
+  });
+
+  const aiSummaryQuery = useQuery({
+    queryKey: ["analytics-ai-summary", startDate, endDate],
+    queryFn: async (): Promise<AiSummary> => {
+      const { data, error } = await supabase.rpc("analytics_ai_summary", {
+        p_start: startDate ? startDate : null,
+        p_end: endDate ? endDate : null,
+      });
+
+      if (error) throw error;
+      const summary = (data ?? {}) as AiSummary;
+      return {
+        satisfied: summary.satisfied ?? 0,
+        neutral: summary.neutral ?? 0,
+        angry: summary.angry ?? 0,
+        avgScore: summary.avgScore ?? 0,
+        total: summary.total ?? 0,
+      };
     },
   });
 
@@ -207,6 +225,7 @@ export default function ChatAnalyticsOverviewPage() {
       overviewSummaryQuery.refetch(),
       commonWordsQuery.refetch(),
       stopwordsQuery.refetch(),
+      aiSummaryQuery.refetch(),
       // bookedToursByDateQuery.refetch(),
     ]);
   };
@@ -223,7 +242,6 @@ export default function ChatAnalyticsOverviewPage() {
       const res = await fetch("/api/analytics/refresh-common-words", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ day: wordDay }),
       });
       const data = await res.json();
       if (!res.ok || !data?.ok) {
@@ -231,8 +249,7 @@ export default function ChatAnalyticsOverviewPage() {
       }
       await commonWordsQuery.refetch();
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Refresh failed";
+      const message = err instanceof Error ? err.message : "Refresh failed";
       setRefreshWordsError(message);
     } finally {
       setRefreshingWords(false);
@@ -266,6 +283,9 @@ export default function ChatAnalyticsOverviewPage() {
     () => stopwords.filter((row) => row.lang === "fr"),
     [stopwords],
   );
+  const stopwordSet = useMemo(() => {
+    return new Set(stopwords.map((row) => `${row.lang}:${row.word}`));
+  }, [stopwords]);
 
   const [stopwordError, setStopwordError] = useState<string | null>(null);
 
@@ -280,6 +300,7 @@ export default function ChatAnalyticsOverviewPage() {
       throw error;
     }
     await stopwordsQuery.refetch();
+    await refreshCommonWords();
   };
 
   const deleteStopword = async (id: number) => {
@@ -326,21 +347,25 @@ export default function ChatAnalyticsOverviewPage() {
         corporateSessionPct={corporateSessionPct}
         multiMessageVisitors={overviewSummary.multiMessageVisitors}
         multiMessageVisitorPct={multiMessageVisitorPct}
-        multiSessionMessageVisitors={overviewSummary.multiSessionMessageVisitors}
+        multiSessionMessageVisitors={
+          overviewSummary.multiSessionMessageVisitors
+        }
         multiSessionMessageVisitorPct={multiSessionMessageVisitorPct}
         topPages={overviewSummary.topPages}
         topResidences={overviewSummary.topResidences}
         topLangs={overviewSummary.topLangs}
+        aiSummary={aiSummaryQuery.data ?? null}
       />
 
       <CommonWordsSection
         isAdmin={isAdmin}
         refreshCommonWords={refreshCommonWords}
         refreshingWords={refreshingWords}
-        day={wordDay}
         loading={commonWordsQuery.isLoading}
         enWords={enWords}
         frWords={frWords}
+        onAddStopword={addStopword}
+        stopwordSet={stopwordSet}
       />
       {refreshWordsError ? (
         <div className="text-sm text-destructive">{refreshWordsError}</div>

@@ -29,6 +29,13 @@ type OverviewProps = {
   topPages: ChartItem[];
   topResidences: ChartItem[];
   topLangs: ChartItem[];
+  aiSummary?: {
+    satisfied: number;
+    neutral: number;
+    angry: number;
+    avgScore: number;
+    total: number;
+  } | null;
 };
 
 export function AnalyticsOverviewSection({
@@ -48,7 +55,15 @@ export function AnalyticsOverviewSection({
   topPages,
   topResidences,
   topLangs,
+  aiSummary,
 }: OverviewProps) {
+  const ai = aiSummary ?? {
+    satisfied: 0,
+    neutral: 0,
+    angry: 0,
+    avgScore: 0,
+    total: 0,
+  };
   return (
     <section id="analytics-overview" className="space-y-4">
       <div className="flex items-center justify-between">
@@ -129,6 +144,60 @@ export function AnalyticsOverviewSection({
           </div>
         </Card>
       </div>
+
+      <Card className="p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">
+              AI-driven analyzer
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Sentiment counts and average satisfaction from the latest analysis per visitor.
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Card className="p-4">
+            <div className="text-xs text-muted-foreground">Satisfied</div>
+            <div className="text-2xl font-semibold text-emerald-400">
+              {ai.satisfied}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              of {ai.total} analyzed
+            </div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-xs text-muted-foreground">Neutral</div>
+            <div className="text-2xl font-semibold text-yellow-400">
+              {ai.neutral}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              of {ai.total} analyzed
+            </div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-xs text-muted-foreground">Angry</div>
+            <div className="text-2xl font-semibold text-red-400">
+              {ai.angry}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              of {ai.total} analyzed
+            </div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-xs text-muted-foreground">
+              Avg satisfaction
+            </div>
+            <div className="text-2xl font-semibold">
+              {ai.avgScore.toFixed(2)}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              based on latest per visitor
+            </div>
+          </Card>
+        </div>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-4 space-y-4">

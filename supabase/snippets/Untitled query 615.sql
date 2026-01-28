@@ -1,4 +1,1 @@
-select name, bucket_id, path_tokens
-from storage.objects
-order by created_at desc
-limit 5;
+select * from net._http_response where request_id = 9455;

@@ -9,9 +9,25 @@ import { useReplay } from "../../hooks/useReplay";
 import { useDeleteVisitor } from "../../hooks/useDeleteVisitor";
 import { useProfileLevel } from "../../hooks/useProfileLevel";
 import { AnalyticsReplaySection } from "../sections/AnalyticsReplaySection";
-import type { MessageRow, SessionRow, SourceRow, VisitorRow } from "../../types/types";
+import type {
+  ConversationAnalysis,
+  MessageRow,
+  SessionRow,
+  SourceRow,
+  VisitorRow,
+  VisitorAnalysisRow,
+} from "../../types/types";
+import { useSearchParams } from "next/navigation";
 
-type FormFilter = "all" | "submitted" | "not_submitted";
+type FilterOption =
+  | "all"
+  | "submitted"
+  | "not_submitted"
+  | "requested"
+  | "reviewed"
+  | "ai_satisfied"
+  | "ai_neutral"
+  | "ai_angry";
 
 type VisitorFormRow = {
   visitor_id: string;
@@ -30,6 +46,20 @@ type BookATourStats = {
 type DocumentSectionRow = { id: number; document_id: number };
 
 type DocumentRow = { id: number; name: string };
+type ReviewRequestRow = {
+  id: number;
+  visitor_id: string;
+  session_id: string | null;
+  requester_id: string;
+  requester_email: string | null;
+  requester_comment: string;
+  status: "pending" | "reviewed" | "closed";
+  reviewer_id: string | null;
+  reviewer_email: string | null;
+  reviewer_comment: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+};
 
 const EMPTY_VISITORS: VisitorRow[] = [];
 const EMPTY_SESSIONS: SessionRow[] = [];
@@ -39,6 +69,7 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
   const supabase = createClient();
 
   const { isAdmin } = useProfileLevel();
+  const searchParams = useSearchParams();
 
   // Pagination for visitors
   const PAGE_SIZE = 50;
@@ -51,44 +82,62 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
   // Search
   const [sessionSearch, setSessionSearch] = useState("");
 
-  const [formFilter, setFormFilter] = useState<FormFilter>("all");
+  const [filterOption, setFilterOption] = useState<FilterOption>("all");
 
-  // Toggle conversation mode
-  const [isBySession, setIsBySession] = useState(true);
+  const [analysisLoadingVisitorId, setAnalysisLoadingVisitorId] = useState<string | null>(null);
+  const [analysisError, setAnalysisError] = useState<{ visitorId: string; message: string } | null>(null);
+  const [analysisOverrides, setAnalysisOverrides] = useState<Map<string, VisitorAnalysisRow>>(new Map());
+
+  // Toggle conversation mode (seed from URL if provided)
+  const modeParam = searchParams.get("mode");
+  const [isBySession, setIsBySession] = useState(modeParam !== "full");
 
   // Date range filter (used to pull visitors + forms from DB)
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
 
+  const visitorIdFromUrl = searchParams.get("visitor_id") ?? "";
+
   // ---- Visitors (pulled from DB based on date) ----
   const visitorsQuery = useQuery({
-    queryKey: ["analytics-visitors", visitorPage, startDate, endDate],
+    queryKey: [
+      "analytics-visitors",
+      visitorPage,
+      startDate,
+      endDate,
+      filterOption,
+    ],
     queryFn: async (): Promise<{
       visitors: VisitorRow[];
       totalCount: number | null;
     }> => {
-      const from = 0;
-      const to = visitorPage * PAGE_SIZE + (PAGE_SIZE - 1);
-
-      let query = supabase
-        .from("visitors")
-        .select("id,created_at", { count: "exact" })
-        .order("created_at", { ascending: false });
-
-      if (startDate) {
-        query = query.gte("created_at", startDate);
-      }
-      if (endDate) {
-        query = query.lte("created_at", `${endDate} 23:59:59`);
-      }
-
-      const { data, error, count } = await query.range(from, to);
+      const limit = (visitorPage + 1) * PAGE_SIZE;
+      const { data, error } = await supabase.rpc(
+        "analytics_visitors_filtered",
+        {
+          p_filter: filterOption,
+          p_start_date: startDate || null,
+          p_end_date: endDate ? `${endDate} 23:59:59` : null,
+          p_limit: limit,
+          p_offset: 0,
+        }
+      );
 
       if (error) throw error;
 
+      const rows = (data ?? []) as Array<{
+        id: string;
+        created_at: string;
+        total_count: number;
+      }>;
+      const totalCount = rows.length ? Number(rows[0].total_count) : 0;
+
       return {
-        visitors: (data ?? []) as VisitorRow[],
-        totalCount: count ?? null,
+        visitors: rows.map((row) => ({
+          id: row.id,
+          created_at: row.created_at,
+        })),
+        totalCount,
       };
     },
   });
@@ -102,11 +151,73 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
 
   // derived effective visitor id
   const effectiveVisitorId = useMemo(
-    () => selectedVisitorId || visitors[0]?.id || "",
-    [selectedVisitorId, visitors]
+    () => selectedVisitorId || visitorIdFromUrl || visitors[0]?.id || "",
+    [selectedVisitorId, visitorIdFromUrl, visitors]
   );
 
   const visitorIds = useMemo(() => visitors.map((v) => v.id), [visitors]);
+  const analysisVisitorIds = useMemo(() => {
+    const set = new Set(visitorIds);
+    if (effectiveVisitorId) set.add(effectiveVisitorId);
+    return Array.from(set);
+  }, [visitorIds, effectiveVisitorId]);
+
+  const reviewRequestsQuery = useQuery({
+    queryKey: ["analytics-review-requests", visitorIds],
+    enabled: visitorIds.length > 0,
+    queryFn: async (): Promise<ReviewRequestRow[]> => {
+      const { data, error } = await supabase
+        .from("chat_review_requests")
+        .select(
+          "id,visitor_id,session_id,requester_id,requester_email,requester_comment,status,reviewer_id,reviewer_email,reviewer_comment,created_at,reviewed_at"
+        )
+        .in("visitor_id", visitorIds)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []) as ReviewRequestRow[];
+    },
+  });
+
+  const reviewRequestsByVisitor = useMemo(() => {
+    const map = new Map<string, ReviewRequestRow>();
+    (reviewRequestsQuery.data ?? []).forEach((row) => {
+      if (!map.has(row.visitor_id)) {
+        map.set(row.visitor_id, row);
+      }
+    });
+    return map;
+  }, [reviewRequestsQuery.data]);
+
+  const analysesQuery = useQuery({
+    queryKey: ["analytics-visitor-analyses", analysisVisitorIds],
+    enabled: analysisVisitorIds.length > 0,
+    queryFn: async (): Promise<VisitorAnalysisRow[]> => {
+      const { data, error } = await supabase
+        .from("chat_visitor_analyses")
+        .select(
+          "id,visitor_id,last_message_at,source,model,prompt_version,satisfaction_1_to_10,sentiment,improvement,summary,created_at"
+        )
+        .in("visitor_id", analysisVisitorIds)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []) as VisitorAnalysisRow[];
+    },
+  });
+
+  const analysisByVisitor = useMemo(() => {
+    const map = new Map<string, VisitorAnalysisRow>();
+    (analysesQuery.data ?? []).forEach((row) => {
+      if (!map.has(row.visitor_id)) {
+        map.set(row.visitor_id, row);
+      }
+    });
+    analysisOverrides.forEach((row, visitorId) => {
+      map.set(visitorId, row);
+    });
+    return map;
+  }, [analysesQuery.data, analysisOverrides]);
 
   // ---- Forms / booked tours per visitor (date-filtered by submitted_at) ----
   const bookTourFormsQuery = useQuery({
@@ -163,16 +274,8 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
     return map;
   }, [bookTourRows]);
 
-  // ---- Filter visitors list in UI (search + form filter only) ----
-  const filteredVisitors = visitors.filter((v) => {
-    const stats = bookTourStatsByVisitor.get(v.id);
-    const isSubmitted = !!stats?.submitted;
-
-    if (formFilter === "submitted") return isSubmitted;
-    if (formFilter === "not_submitted") return !isSubmitted;
-
-    return true;
-  });
+  // ---- Visitors are already filtered by RPC ----
+  const filteredVisitors = visitors;
 
   // ---- Sessions for selected visitor (NOT date-filtered) ----
   const sessionsQuery = useQuery({
@@ -212,7 +315,11 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
   // derived effective session id
   const effectiveSessionId = useMemo(() => {
     if (!isBySession) return "";
-    return selectedSessionId || filteredSessions[0]?.id || "";
+    if (selectedSessionId) {
+      const exists = filteredSessions.some((s) => s.id === selectedSessionId);
+      if (exists) return selectedSessionId;
+    }
+    return filteredSessions[0]?.id || "";
   }, [isBySession, selectedSessionId, filteredSessions]);
 
   const { data: replay, isLoading: loadingReplay } = useReplay(
@@ -234,6 +341,97 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
 
     setVisitorPage(0);
     await refreshAll();
+  };
+
+  const requestReview = async (visitorId: string, comment: string) => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error("You must be logged in to request a review.");
+    }
+
+    const { error } = await supabase.from("chat_review_requests").insert({
+      visitor_id: visitorId,
+      requester_id: user.id,
+      requester_email: user.email ?? null,
+      requester_comment: comment,
+      status: "pending",
+    });
+
+    if (error) throw error;
+    await reviewRequestsQuery.refetch();
+  };
+
+  const analyzeVisitor = async (
+    visitorId: string
+  ): Promise<ConversationAnalysis> => {
+    setAnalysisError(null);
+    setAnalysisLoadingVisitorId(visitorId);
+    try {
+      const res = await fetch("/api/analytics/satisfaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visitor_id: visitorId }),
+      });
+
+      const contentType = res.headers.get("content-type") || "";
+      const raw = await res.text();
+
+      if (!res.ok) {
+        throw new Error(
+          `API ${res.status} ${res.statusText}. Body starts with: ${raw.slice(
+            0,
+            120
+          )}`
+        );
+      }
+
+      if (
+        raw.trim().startsWith("<!DOCTYPE") ||
+        contentType.includes("text/html")
+      ) {
+        throw new Error(
+          `Expected JSON but got HTML. Check route path/middleware. Body starts with: ${raw.slice(
+            0,
+            120
+          )}`
+        );
+      }
+
+      let data: any;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        throw new Error(
+          `Response was not valid JSON. Body starts with: ${raw.slice(0, 120)}`
+        );
+      }
+
+      if (!data?.ok) throw new Error(data?.error || "Analysis failed");
+
+      const analysis = data.analysis as ConversationAnalysis;
+      const row = data.row as VisitorAnalysisRow | null;
+
+      if (row) {
+        setAnalysisOverrides((prev) => {
+          const next = new Map(prev);
+          next.set(visitorId, row);
+          return next;
+        });
+      }
+
+      await analysesQuery.refetch();
+      return analysis;
+    } catch (e: any) {
+      setAnalysisError({
+        visitorId,
+        message: e?.message ?? "Failed to analyze",
+      });
+      throw e;
+    } finally {
+      setAnalysisLoadingVisitorId(null);
+    }
   };
 
   // Full replay query (NOT date-filtered)
@@ -354,7 +552,12 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
   });
 
   const refreshAll = async () => {
-    await Promise.all([visitorsQuery.refetch(), sessionsQuery.refetch()]);
+    await Promise.all([
+      visitorsQuery.refetch(),
+      sessionsQuery.refetch(),
+      reviewRequestsQuery.refetch(),
+      analysesQuery.refetch(),
+    ]);
   };
 
   const replayData = isBySession ? replay : fullReplayQuery.data;
@@ -401,10 +604,17 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
         filteredVisitors={filteredVisitors}
         deleteVisitor={handleDeleteVisitor}
         setVisitorPage={setVisitorPage}
+        onLoadMoreVisitors={() => setVisitorPage((prev) => prev + 1)}
         deleting={deletingVisitor}
-        formFilter={formFilter}
-        setFormFilter={setFormFilter}
+        filterOption={filterOption}
+        setFilterOption={setFilterOption}
         bookTourStatsByVisitor={bookTourStatsByVisitor}
+        reviewRequestsByVisitor={reviewRequestsByVisitor}
+        onRequestReview={requestReview}
+        analysisByVisitor={analysisByVisitor}
+        analysisLoadingVisitorId={analysisLoadingVisitorId}
+        analysisError={analysisError}
+        onAnalyzeVisitor={analyzeVisitor}
         sessions={sessions}
         filteredSessions={filteredSessions}
         selectedSessionId={effectiveSessionId}

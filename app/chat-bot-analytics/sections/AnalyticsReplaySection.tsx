@@ -5,9 +5,24 @@ import { Card } from "@/components/ui/card";
 import { ConversationSection } from "./ConversationSection";
 import { SessionsSection } from "./SessionsSections";
 import { VisitorsSessions } from "./VisitorsSection";
-import type { MessageRow, SessionRow, SourceRow, VisitorRow } from "@/app/types/types";
+import type {
+  MessageRow,
+  SessionRow,
+  SourceRow,
+  VisitorRow,
+  VisitorAnalysisRow,
+  ConversationAnalysis,
+} from "@/app/types/types";
 
-type FormFilter = "all" | "submitted" | "not_submitted";
+type FilterOption =
+  | "all"
+  | "submitted"
+  | "not_submitted"
+  | "requested"
+  | "reviewed"
+  | "ai_satisfied"
+  | "ai_neutral"
+  | "ai_angry";
 
 type BookATourStats = {
   submitted: boolean;
@@ -32,10 +47,27 @@ type ReplaySectionProps = {
   filteredVisitors: VisitorRow[];
   deleteVisitor: (id: string) => void;
   setVisitorPage: (updater: (prev: number) => number) => void;
+  onLoadMoreVisitors: () => void;
   deleting: boolean;
-  formFilter: FormFilter;
-  setFormFilter: (v: FormFilter) => void;
+  filterOption: FilterOption;
+  setFilterOption: (v: FilterOption) => void;
   bookTourStatsByVisitor: Map<string, BookATourStats>;
+  reviewRequestsByVisitor: Map<
+    string,
+    {
+      id: number;
+      status: "pending" | "reviewed" | "closed";
+      requester_email?: string | null;
+      requester_comment: string;
+      reviewer_comment: string | null;
+      created_at: string;
+    }
+  >;
+  onRequestReview: (visitorId: string, comment: string) => Promise<void>;
+  analysisByVisitor: Map<string, VisitorAnalysisRow>;
+  analysisLoadingVisitorId: string | null;
+  analysisError: { visitorId: string; message: string } | null;
+  onAnalyzeVisitor: (visitorId: string) => Promise<ConversationAnalysis>;
   sessions: SessionRow[];
   filteredSessions: SessionRow[];
   selectedSessionId: string;
@@ -69,10 +101,17 @@ export function AnalyticsReplaySection({
   filteredVisitors,
   deleteVisitor,
   setVisitorPage,
+  onLoadMoreVisitors,
   deleting,
-  formFilter,
-  setFormFilter,
+  filterOption,
+  setFilterOption,
   bookTourStatsByVisitor,
+  reviewRequestsByVisitor,
+  onRequestReview,
+  analysisByVisitor,
+  analysisLoadingVisitorId,
+  analysisError,
+  onAnalyzeVisitor,
   sessions,
   filteredSessions,
   selectedSessionId,
@@ -89,8 +128,8 @@ export function AnalyticsReplaySection({
       <div
         className={`grid grid-cols-1 gap-4 ${
           isBySession
-            ? "lg:grid-cols-[380px_420px_1fr]"
-            : "lg:grid-cols-[380px_220px_1fr]"
+            ? "lg:grid-cols-[320px_360px_minmax(0,1fr)]"
+            : "lg:grid-cols-[320px_220px_minmax(0,1fr)]"
         } ease-in-out duration-300`}
       >
         <VisitorsSessions
@@ -106,10 +145,16 @@ export function AnalyticsReplaySection({
           filteredVisitors={filteredVisitors}
           deleteVisitor={deleteVisitor}
           setVisitorPage={setVisitorPage}
+          onLoadMoreVisitors={onLoadMoreVisitors}
           deleting={deleting}
-          formFilter={formFilter}
-          setFormFilter={setFormFilter}
+          filterOption={filterOption}
+          setFilterOption={setFilterOption}
           bookTourStatsByVisitor={bookTourStatsByVisitor}
+          reviewRequestsByVisitor={reviewRequestsByVisitor}
+          onRequestReview={onRequestReview}
+          analysisByVisitor={analysisByVisitor}
+          analysisLoadingVisitorId={analysisLoadingVisitorId}
+          onAnalyzeVisitor={onAnalyzeVisitor}
         />
 
         <SessionsSection
@@ -159,6 +204,15 @@ export function AnalyticsReplaySection({
             setSelectedSessionId={setSelectedSessionId}
             filteredSessions={filteredSessions}
             selectedVisitorId={selectedVisitorId}
+            isAdmin={isAdmin}
+            analysis={analysisByVisitor.get(selectedVisitorId) ?? null}
+            analysisLoading={analysisLoadingVisitorId === selectedVisitorId}
+            analysisError={
+              analysisError?.visitorId === selectedVisitorId
+                ? analysisError.message
+                : null
+            }
+            onAnalyze={onAnalyzeVisitor}
           />
         </Card>
       </div>

@@ -5,7 +5,7 @@ export default function UserDataTrackerPage() {
     <div className="w-full h-full flex items-center justify-center">
       <Card className="p-8 rounded-lg shadow-lg ">
         <h1 className="text-2xl font-bold">User Data Tracker Page</h1>
-        <p>Devs are working on implementation</p>
+        <p>Devs will be working on implementation</p>
       </Card>
     </div>
   );
