@@ -21,6 +21,7 @@ import {
   Download,
 } from "lucide-react";
 import { useState, useRef, useMemo } from "react";
+import JSZip from "jszip";
 
 import { cn } from "@/lib/utils";
 
@@ -55,6 +56,7 @@ export default function DashboardPage() {
   // const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isBulkDownloading, setIsBulkDownloading] = useState(false);
 
   // ✅ FIXED: useQuery v5 Syntax
   const { data: residences, isLoading: loadingResidences } = useQuery({
@@ -322,6 +324,115 @@ export default function DashboardPage() {
     document.body.removeChild(link);
   };
 
+  const sanitizeFolderName = (name: string) =>
+    name.trim().replace(/[\\/:*?"<>|]+/g, "-");
+
+  const getDocumentPath = (doc: Document) =>
+    doc.storage_object_path
+      ?.replace(/^files\//, "")
+      .replace(/^\/+/, "") ?? null;
+
+  const downloadDocumentsZip = async (
+    docs: Document[],
+    zipName: string,
+    folderForDoc: (doc: Document) => string
+  ) => {
+    const zip = new JSZip();
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const doc of docs) {
+      const path = getDocumentPath(doc);
+      if (!path) {
+        failCount++;
+        continue;
+      }
+
+      const { data, error } = await supabase.storage
+        .from("files")
+        .createSignedUrl(path, 60, { download: true });
+
+      if (error || !data?.signedUrl) {
+        failCount++;
+        continue;
+      }
+
+      const response = await fetch(data.signedUrl);
+      if (!response.ok) {
+        failCount++;
+        continue;
+      }
+
+      const blob = await response.blob();
+      const filename = path.split("/").pop() || doc.name || `file-${doc.id}`;
+      const folder = sanitizeFolderName(folderForDoc(doc) || "files");
+
+      zip.file(`${folder}/${filename}`, blob);
+      successCount++;
+    }
+
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(zipBlob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = zipName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    return { successCount, failCount };
+  };
+
+  const downloadResidenceZip = async () => {
+    if (!selectedResidence) {
+      toast({ description: "Select a residence first" });
+      return;
+    }
+
+    if (!documents || documents.length === 0) {
+      toast({ description: "No files to download" });
+      return;
+    }
+
+    setIsBulkDownloading(true);
+    try {
+      const zipName = `${sanitizeFolderName(
+        selectedResidence.name
+      )}-files.zip`;
+      const { successCount, failCount } = await downloadDocumentsZip(
+        documents,
+        zipName,
+        () => selectedResidence.name
+      );
+
+      if (successCount > 0) {
+        toast({
+          description: `Downloaded ${successCount} file${
+            successCount > 1 ? "s" : ""
+          }`,
+        });
+      }
+
+      if (failCount > 0) {
+        toast({
+          variant: "destructive",
+          description: `${failCount} file${
+            failCount > 1 ? "s" : ""
+          } failed to download`,
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      toast({
+        variant: "destructive",
+        description: "Failed to download files",
+      });
+    } finally {
+      setIsBulkDownloading(false);
+    }
+  };
+
   const deleteDocument = async (doc: Document) => {
     if (!confirm("Delete this file?")) return;
 
@@ -564,13 +675,26 @@ export default function DashboardPage() {
                         {filteredDocuments.length !== 1 ? "s" : ""}
                       </p>
                     </div>
-                    <Button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="gap-2"
-                    >
-                      <Upload className="h-4 w-4" />
-                      Upload Files
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={downloadResidenceZip}
+                        className="gap-2"
+                        disabled={isBulkDownloading || !documents?.length}
+                      >
+                        <Download className="h-4 w-4" />
+                        {isBulkDownloading
+                          ? "Preparing..."
+                          : "Download Residence"}
+                      </Button>
+                      <Button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="gap-2"
+                      >
+                        <Upload className="h-4 w-4" />
+                        Upload Files
+                      </Button>
+                    </div>
                     <input
                       ref={fileInputRef}
                       type="file"
