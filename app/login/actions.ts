@@ -141,17 +141,17 @@ export async function submitCredentials(formData: FormData) {
 
     if (passwordError) return { error: "Invalid email or password" };
 
-    await supabase.auth.signOut();
+    // await supabase.auth.signOut();
 
-    const { error: otpError } = await supabase.auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: false },
-    });
+    // const { error: otpError } = await supabase.auth.signInWithOtp({
+    //   email,
+    //   options: { shouldCreateUser: false },
+    // });
 
-    if (otpError) {
-      console.log("OTP ERROR:", otpError); // <- includes code/status
-      return { error: otpError.message };
-    }
+    // if (otpError) {
+    //   console.log("OTP ERROR:", otpError); // <- includes code/status
+    //   return { error: otpError.message };
+    // }
 
     return { success: true };
   }
