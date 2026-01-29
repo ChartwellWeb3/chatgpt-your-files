@@ -259,7 +259,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  let body: { cutoff_days?: number; limit?: number } = {};
+  let body: { cutoff_days?: number; limit?: number; force?: boolean } = {};
   try {
     body = await req.json();
   } catch {
@@ -272,6 +272,7 @@ Deno.serve(async (req) => {
   const limit = Number.isFinite(body.limit)
     ? Math.max(1, Math.floor(body.limit as number))
     : 25;
+  const force = body.force === true;
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
@@ -282,6 +283,7 @@ Deno.serve(async (req) => {
     {
       p_cutoff_days: cutoffDays,
       p_limit: limit,
+      p_force: force,
     }
   );
 
