@@ -293,7 +293,7 @@ export async function POST(req: Request) {
 
   const { data: inserted, error: insertErr } = await supabase
     .from("chat_visitor_analyses")
-    .insert({
+    .upsert({
       visitor_id: visitorId,
       last_message_at: lastMessageAt,
       source: "manual",
@@ -306,11 +306,12 @@ export async function POST(req: Request) {
       evidence_visitor_goal: analysis.evidence.visitor_goal,
       evidence_goal_met: analysis.evidence.goal_met,
       evidence_key_quotes: analysis.evidence.key_quotes,
+      created_at: new Date().toISOString(),
       raw: {
         response_id: r.id ?? null,
         output: parsed,
       },
-    })
+    }, { onConflict: "visitor_id,last_message_at,source" })
     .select(
       "id,visitor_id,last_message_at,source,model,prompt_version,satisfaction_1_to_10,sentiment,improvement,summary,evidence_visitor_goal,evidence_goal_met,evidence_key_quotes,created_at"
     )

@@ -345,7 +345,7 @@ Deno.serve(async (req) => {
 
       const { error: insertErr } = await supabase
         .from("chat_visitor_analyses")
-        .insert({
+        .upsert({
           visitor_id: visitorId,
           last_message_at: lastMessageAt,
           source: "auto",
@@ -358,11 +358,12 @@ Deno.serve(async (req) => {
           evidence_visitor_goal: analysis.evidence.visitor_goal,
           evidence_goal_met: analysis.evidence.goal_met,
           evidence_key_quotes: analysis.evidence.key_quotes,
+          created_at: new Date().toISOString(),
           raw: {
             response_id,
             output: raw,
           },
-        });
+        }, { onConflict: "visitor_id,last_message_at,source" });
 
       if (insertErr) throw insertErr;
 
