@@ -5,7 +5,7 @@ import NavLink from "@/components/NavLink/NavLink"; // Ensure path is correct
 import { LogoutButton } from "@/components/LogoutButton/LogoutButton";
 import { Links } from "@/app/Links/Links";
 import Link from "next/link";
-import type { PropsWithChildren } from "react";
+import type { PropsWithChildren, ReactNode } from "react";
 import "three-dots/dist/three-dots.css";
 import "./globals.css";
 import { BarChart3, Database, Files, Users } from "lucide-react";
@@ -26,7 +26,7 @@ export default async function RootLayout({ children }: PropsWithChildren) {
   // 2. Initialize Supabase using the new SSR utility
   // Note: createClient() now handles the cookies() call internally
   const supabase = await createClient();
-  const navIcons: Record<string, JSX.Element> = {
+  const navIcons: Record<string, ReactNode> = {
     "/chatbot-content-management": <Files className="h-4 w-4" />,
     "/chat-bot-analytics": <BarChart3 className="h-4 w-4" />,
     "/user-data-tracker": <Database className="h-4 w-4" />,
