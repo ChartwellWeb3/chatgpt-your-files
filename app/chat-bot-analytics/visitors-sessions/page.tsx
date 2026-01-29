@@ -196,7 +196,7 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
       const { data, error } = await supabase
         .from("chat_visitor_analyses")
         .select(
-          "id,visitor_id,last_message_at,source,model,prompt_version,satisfaction_1_to_10,sentiment,improvement,summary,created_at"
+          "id,visitor_id,last_message_at,source,model,prompt_version,satisfaction_1_to_10,sentiment,improvement,summary,evidence_visitor_goal,evidence_goal_met,evidence_key_quotes,created_at"
         )
         .in("visitor_id", analysisVisitorIds)
         .order("created_at", { ascending: false });
@@ -208,8 +208,25 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
 
   const analysisByVisitor = useMemo(() => {
     const map = new Map<string, VisitorAnalysisRow>();
+    const hasEvidence = (row: VisitorAnalysisRow) => {
+      if (
+        row.evidence_visitor_goal &&
+        row.evidence_visitor_goal !== "unknown"
+      ) {
+        return true;
+      }
+      if (row.evidence_goal_met && row.evidence_goal_met !== "unknown") {
+        return true;
+      }
+      return (row.evidence_key_quotes?.length ?? 0) > 0;
+    };
     (analysesQuery.data ?? []).forEach((row) => {
-      if (!map.has(row.visitor_id)) {
+      const existing = map.get(row.visitor_id);
+      if (!existing) {
+        map.set(row.visitor_id, row);
+        return;
+      }
+      if (!hasEvidence(existing) && hasEvidence(row)) {
         map.set(row.visitor_id, row);
       }
     });
