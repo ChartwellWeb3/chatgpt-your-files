@@ -64,6 +64,9 @@ export function AnalyticsOverviewSection({
     avgScore: 0,
     total: 0,
   };
+  const aiTotal = ai.total || 0;
+  const pct = (value: number) =>
+    aiTotal ? `${Math.round((value / aiTotal) * 100)}%` : "0%";
   return (
     <section id="analytics-overview" className="space-y-4">
       <div className="flex items-center justify-between">
@@ -164,7 +167,7 @@ export function AnalyticsOverviewSection({
               {ai.satisfied}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              of {ai.total} analyzed
+              {pct(ai.satisfied)} of {ai.total} analyzed
             </div>
           </Card>
           <Card className="p-4">
@@ -173,7 +176,7 @@ export function AnalyticsOverviewSection({
               {ai.neutral}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              of {ai.total} analyzed
+              {pct(ai.neutral)} of {ai.total} analyzed
             </div>
           </Card>
           <Card className="p-4">
@@ -182,7 +185,7 @@ export function AnalyticsOverviewSection({
               {ai.angry}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              of {ai.total} analyzed
+              {pct(ai.angry)} of {ai.total} analyzed
             </div>
           </Card>
           <Card className="p-4">
