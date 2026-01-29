@@ -1,6 +1,8 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useState } from "react";
 import { MiniBarChart, type ChartItem } from "./MiniBarChart";
 import { DateRangePicker } from "./DateRangePicker";
 
@@ -57,6 +59,9 @@ export function AnalyticsOverviewSection({
   topLangs,
   aiSummary,
 }: OverviewProps) {
+  const [promptOpen, setPromptOpen] = useState(false);
+  const [promptText, setPromptText] = useState("");
+  const [promptVersion, setPromptVersion] = useState("");
   const ai = aiSummary ?? {
     satisfied: 0,
     neutral: 0,
@@ -67,8 +72,90 @@ export function AnalyticsOverviewSection({
   const aiTotal = ai.total || 0;
   const pct = (value: number) =>
     aiTotal ? `${Math.round((value / aiTotal) * 100)}%` : "0%";
+  const promptByVersion: Record<string, string> = {
+    v1: `
+You are an analyst evaluating a visitor's full chatbot conversation for ANY client/domain.
+
+You MUST use ONLY the transcript. Do NOT assume product features, policies, or company details that are not in the transcript.
+
+Your job:
+1) Determine the visitor's primary goal (what they were trying to accomplish).
+2) Decide whether the goal was achieved based on evidence in the transcript.
+3) Infer sentiment from the visitor's tone + outcome (goal achieved or not).
+
+Return JSON only with exactly these keys:
+{
+  "satisfaction_1_to_10": number,
+  "sentiment": "satisfied" | "neutral" | "angry" | "unknown",
+  "improvement": string,
+  "summary": string,
+  "evidence": {
+    "visitor_goal": string,
+    "goal_met": "yes" | "partial" | "no" | "unknown",
+    "key_quotes": string[]
+  }
+ }
+
+Scoring rubric (be consistent):
+- 9–10: Goal clearly achieved AND visitor expresses approval/thanks OR no further help needed.
+- 7–8: Goal achieved but minor friction (extra steps, unclear phrasing, minor repetition).
+- 5–6: Partial help; visitor still missing something or outcome unclear.
+- 3–4: Mostly unhelpful; confusion, wrong direction, repeated failures.
+- 1–2: Very bad; visitor is clearly frustrated/angry, bot blocks, or fails completely.
+
+Sentiment rules:
+- "satisfied": visitor expresses positive emotion OR goal clearly met with no frustration.
+- "angry": explicit frustration/negative tone OR repeated failure AND visitor escalates/complains.
+- "neutral": neither satisfied nor angry; or mixed tone with partial resolution.
+- "unknown": transcript too short/ambiguous to infer tone or outcome.
+
+Evidence rules:
+- visitor_goal: 1 short sentence describing the visitor's main intent.
+- goal_met: yes/partial/no/unknown based on transcript outcomes.
+- key_quotes: 1–3 short exact quotes (<= 20 words each) from the transcript that justify score/sentiment.
+  If transcript is extremely short, provide an empty array.
+
+Output rules:
+- JSON only. No markdown.
+- "improvement" and "summary" must be in English even if transcript is French.
+- improvement: one line, actionable, start with a verb, and include ONE category label:
+  Categories: [clarify], [accuracy], [handoff], [ux], [tone], [policy], [speed], [links]
+  Example: "[clarify] Ask one follow-up question to confirm location before recommending options."
+- summary: 2–3 short sentences, describing what happened and the outcome.
+`.trim(),
+  };
+
+  const openPromptModal = (version: string) => {
+    setPromptVersion(version);
+    setPromptText(promptByVersion[version] ?? "Prompt not found for this version.");
+    setPromptOpen(true);
+  };
   return (
     <section id="analytics-overview" className="space-y-4">
+      {promptOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-3xl rounded-lg border border-border bg-card shadow-lg">
+            <div className="flex items-center justify-between border-b border-border p-4">
+              <div>
+                <div className="text-sm font-semibold">Analyzer prompt</div>
+                <div className="text-xs text-muted-foreground">
+                  Version: {promptVersion || "unknown"}
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPromptOpen(false)}
+              >
+                Close
+              </Button>
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto p-4 text-xs whitespace-pre-wrap">
+              {promptText}
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Overview</h2>
         <div className="w-[260px]">
@@ -158,6 +245,13 @@ export function AnalyticsOverviewSection({
               Sentiment counts and average satisfaction from the latest analysis per visitor.
             </div>
           </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => openPromptModal("v1")}
+          >
+            Watch prompt
+          </Button>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
