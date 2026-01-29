@@ -38,6 +38,11 @@ export type ConversationAnalysis = {
   sentiment: "satisfied" | "neutral" | "angry" | "unknown";
   improvement: string;
   summary: string;
+  evidence?: {
+    visitor_goal: string;
+    goal_met: "yes" | "partial" | "no" | "unknown";
+    key_quotes: string[];
+  };
 };
 
 export type VisitorAnalysisRow = {
@@ -51,5 +56,8 @@ export type VisitorAnalysisRow = {
   sentiment: "satisfied" | "neutral" | "angry" | "unknown";
   improvement: string;
   summary: string;
+  evidence_visitor_goal?: string | null;
+  evidence_goal_met?: "yes" | "partial" | "no" | "unknown" | null;
+  evidence_key_quotes?: string[] | null;
   created_at: string;
 };
