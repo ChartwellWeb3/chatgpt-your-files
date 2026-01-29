@@ -15,6 +15,10 @@ import { createClient } from "./utils/supabase/server";
 export const metadata = {
   title: "Residence Manager",
   description: "Manage your residences and files with AI",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+  },
 };
 
 export default async function RootLayout({ children }: PropsWithChildren) {
