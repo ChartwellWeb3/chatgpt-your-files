@@ -66,16 +66,23 @@ Output rules:
 `.trim();
 }
 
-function getResponseText(r: any) {
-  if (typeof r?.output_text === "string" && r.output_text.trim()) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function getResponseText(r: unknown) {
+  if (isRecord(r) && typeof r.output_text === "string" && r.output_text.trim()) {
     return r.output_text.trim();
   }
 
   const parts: string[] = [];
-  for (const item of r?.output ?? []) {
-    for (const c of item?.content ?? []) {
-      if (typeof c?.text === "string") parts.push(c.text);
-      if (typeof c?.content === "string") parts.push(c.content);
+  const output = isRecord(r) && Array.isArray(r.output) ? r.output : [];
+  for (const item of output) {
+    const content =
+      isRecord(item) && Array.isArray(item.content) ? item.content : [];
+    for (const c of content) {
+      if (isRecord(c) && typeof c.text === "string") parts.push(c.text);
+      if (isRecord(c) && typeof c.content === "string") parts.push(c.content);
     }
   }
   return parts.join("\n").trim();
