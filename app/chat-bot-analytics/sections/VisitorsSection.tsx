@@ -784,18 +784,6 @@ Output rules:
                         Last msg: {fmtDate(analysis.last_message_at)}
                       </span>
                     </div>
-                    <div>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openPromptModal(analysis.prompt_version);
-                        }}
-                      >
-                        Watch prompt
-                      </Button>
-                    </div>
                   </div>
                 ) : null}
 
