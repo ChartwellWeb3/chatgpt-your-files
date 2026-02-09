@@ -27,6 +27,19 @@ type SortOrderField = {
   value?: string | number;
 };
 
+type JsonValueField = {
+  jsonValue?: unknown;
+};
+
+type PropertySuitPlan = {
+  id?: string;
+  name?: string;
+  regularPrice?: FieldValue;
+  promoPrice?: FieldValue;
+  promoStartDate?: JsonValueField;
+  promoEndDate?: JsonValueField;
+};
+
 type LinkField = {
   url?: {
     path?: string;
@@ -111,7 +124,7 @@ type ResidenceItem = LanguageCarrier & {
   languages?: Array<{ language?: LanguageRef }>;
   propertyId?: FieldValue;
   navigationTitle?: FieldValue;
-  propertySuitPlans?: MultilistField<unknown>;
+  propertySuitPlans?: MultilistField<PropertySuitPlan>;
   city?: MultilistField<CityItem>;
   province?: MultilistField<ProvinceItem>;
   provinceSelector?: MultilistField<ProvinceItem>;
@@ -168,7 +181,7 @@ export type MappedResidence = {
   residenceName?: string;
   cityId?: string;
   cityName?: string;
-  propertySuitPlans?: unknown[];
+  propertySuitPlans?: PropertySuitPlan[];
   cityNameDisplay: string;
   provinceId?: string;
   provinceName: string;

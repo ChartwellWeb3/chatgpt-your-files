@@ -166,14 +166,6 @@ function groupByCity(items: ResidenceItem[], language: LanguageCode) {
   );
 }
 
-/**
- * ✅ Builds markdown EXACTLY like your example file:
- * # Retirement Homes in Alberta. Find a right residence in Calgary
- *
- * Name: ...; Address: ...; ...
- *
- * (blank line between entries)
- */
 function buildMarkdownForProvince(
   province: string,
   groups: { label: string; items: ResidenceItem[] }[],
