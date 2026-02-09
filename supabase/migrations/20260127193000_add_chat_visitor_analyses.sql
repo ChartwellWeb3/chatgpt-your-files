@@ -95,7 +95,7 @@ begin
             ),
             body := jsonb_build_object(
               'cutoff_days', 7,
-              'limit', 25
+              'limit', 150
             )
           );
       $cmd$
