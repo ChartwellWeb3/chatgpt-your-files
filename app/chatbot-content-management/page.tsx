@@ -1,13 +1,21 @@
 "use client";
-
+import { modelData, type ModelDataResult } from "./helpers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 
 import { toast } from "@/components/ui/use-toast";
 
 import { createClient } from "../utils/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-
+import { ChatBotDownloadResDataSection } from "./sections/ChatBotDownloadResDataSection";
 import {
   Building2,
   FileText,
@@ -19,11 +27,19 @@ import {
   Check,
   Loader2,
   Download,
+  ArrowLeft,
 } from "lucide-react";
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import JSZip from "jszip";
 
 import { cn } from "@/lib/utils";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 type Residence = {
   id: number;
@@ -44,7 +60,7 @@ export default function DashboardPage() {
   const supabase = createClient();
   const queryClient = useQueryClient();
   const [selectedResidence, setSelectedResidence] = useState<Residence | null>(
-    null
+    null,
   );
   const [isCreating, setIsCreating] = useState(false);
   const [newResidenceName, setNewResidenceName] = useState("");
@@ -53,10 +69,81 @@ export default function DashboardPage() {
   const [editedName, setEditedName] = useState("");
   const [editedCustomId, setEditedCustomId] = useState("");
   const [activeTab, setActiveTab] = useState<"files" | "chat">("files");
+  const [sitecoreLanguage, setSitecoreLanguage] = useState<"en" | "fr">("fr");
+  const [isFetchingSitecore, setIsFetchingSitecore] = useState(false);
+  const [sitecoreResidences, setSitecoreResidences] =
+    useState<ModelDataResult | null>(null);
   // const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
+
+  const sitecoreCopy = useMemo(
+    () => ({
+      en: {
+        title: "Sitecore Residence Data",
+        prodBadge: "Prod Sitecore",
+        description:
+          "This connects to production Sitecore. Use it to generate the latest residences markdown files.",
+        languagePlaceholder: "Language",
+        loadButton: "Load Sitecore",
+        loadingButton: "Loading Sitecore",
+        workflowTitle: "Update workflow",
+        workflowSteps: [
+          "When pricing changes or residences are added/removed, download the file.",
+          "Update `corporateen` or `corporatefr` based on the selected language.",
+          "Remove the old file before uploading the new one.",
+        ],
+      },
+      fr: {
+        title: "Sitecore Residence Data",
+        prodBadge: "Prod Sitecore",
+        description:
+          "This connects to production Sitecore. Use it to generate the latest residences markdown files.",
+        languagePlaceholder: "Language",
+        loadButton: "Load Sitecore",
+        loadingButton: "Loading Sitecore",
+        workflowTitle: "Update workflow",
+        workflowSteps: [
+          "When pricing changes or residences are added/removed, download the file.",
+          "Update `corporateen` or `corporatefr` based on the selected language.",
+          "Remove the old file before uploading the new one.",
+        ],
+      },
+    }),
+    [],
+  );
+  const activeSitecoreCopy = sitecoreCopy[sitecoreLanguage];
+
+  const fetchResidenceSelector = async (language: "en" | "fr") => {
+    setIsFetchingSitecore(true);
+    try {
+      const response = await fetch(
+        `/api/sitecore/residence-selector?language=${language}`,
+        {
+          method: "GET",
+        },
+      );
+      const data = await response.json();
+      // console.log("[chatbot-content-management] residence-selector:", data);
+      const res = modelData(data.payload.data, language);
+
+      setSitecoreResidences(res);
+    } catch (error) {
+      console.error(
+        "[chatbot-content-management] residence-selector request failed:",
+        error,
+      );
+    } finally {
+      setIsFetchingSitecore(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchResidenceSelector("fr");
+  }, []);
+
+  console.log(sitecoreResidences);
 
   // ✅ FIXED: useQuery v5 Syntax
   const { data: residences, isLoading: loadingResidences } = useQuery({
@@ -124,7 +211,7 @@ export default function DashboardPage() {
 
     return residenceSearch.trim()
       ? residences.filter((r) =>
-          r.name.toLowerCase().startsWith(residenceSearch.trim().toLowerCase())
+          r.name.toLowerCase().startsWith(residenceSearch.trim().toLowerCase()),
         )
       : residences;
   }, [residences, residenceSearch]);
@@ -134,7 +221,7 @@ export default function DashboardPage() {
 
     return fileSearch.trim()
       ? docs.filter((d) =>
-          d.name?.toLowerCase().includes(fileSearch.trim().toLowerCase())
+          d.name?.toLowerCase().includes(fileSearch.trim().toLowerCase()),
         )
       : docs;
   }, [documents, fileSearch]);
@@ -179,7 +266,7 @@ export default function DashboardPage() {
   const deleteResidence = async (residence: Residence) => {
     if (
       !confirm(
-        `Delete "${residence.name}"? This will also delete all associated files.`
+        `Delete "${residence.name}"? This will also delete all associated files.`,
       )
     )
       return;
@@ -328,14 +415,13 @@ export default function DashboardPage() {
     name.trim().replace(/[\\/:*?"<>|]+/g, "-");
 
   const getDocumentPath = (doc: Document) =>
-    doc.storage_object_path
-      ?.replace(/^files\//, "")
-      .replace(/^\/+/, "") ?? null;
+    doc.storage_object_path?.replace(/^files\//, "").replace(/^\/+/, "") ??
+    null;
 
   const downloadDocumentsZip = async (
     docs: Document[],
     zipName: string,
-    folderForDoc: (doc: Document) => string
+    folderForDoc: (doc: Document) => string,
   ) => {
     const zip = new JSZip();
     let successCount = 0;
@@ -397,13 +483,11 @@ export default function DashboardPage() {
 
     setIsBulkDownloading(true);
     try {
-      const zipName = `${sanitizeFolderName(
-        selectedResidence.name
-      )}-files.zip`;
+      const zipName = `${sanitizeFolderName(selectedResidence.name)}-files.zip`;
       const { successCount, failCount } = await downloadDocumentsZip(
         documents,
         zipName,
-        () => selectedResidence.name
+        () => selectedResidence.name,
       );
 
       if (successCount > 0) {
@@ -479,7 +563,15 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="p-2 space-y-1">
+          <div className="p-2 space-y-1 ">
+            <Card
+              onClick={() => setSelectedResidence(null)}
+              className="flex items-center justify-center "
+            >
+              <Button variant="ghost" size="sm" className="h-8 w-full">
+                <ArrowLeft className="h-4 w-4 fill-white text-white" /> Back
+              </Button>
+            </Card>
             {loadingResidences ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -719,7 +811,7 @@ export default function DashboardPage() {
                       "border-2 border-dashed rounded-lg p-6 text-center transition-colors mb-6",
                       isDragging
                         ? "border-primary bg-primary/10"
-                        : "border-border bg-card/50"
+                        : "border-border bg-card/50",
                     )}
                     onDragOver={(e) => {
                       e.preventDefault();
@@ -805,18 +897,75 @@ export default function DashboardPage() {
             )}
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center space-y-4">
-              <div className="w-16 h-16 bg-muted/30 rounded-full flex items-center justify-center mx-auto">
-                <Building2 className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-lg font-medium">Select a residence</p>
-                <p className="text-sm text-muted-foreground">
-                  Choose a residence from the sidebar to get started
-                </p>
-              </div>
-            </div>
+          <div className="flex-1 flex items-center justify-center p-6">
+            <Card className="w-full max-w-2xl bg-card/40 border-border/60 shadow-lg">
+              <CardHeader className="text-center space-y-3">
+                <div className="w-14 h-14 bg-muted/30 rounded-full flex items-center justify-center mx-auto">
+                  <Building2 className="h-7 w-7 text-muted-foreground" />
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <CardTitle className="text-xl">
+                    {activeSitecoreCopy.title}
+                  </CardTitle>
+                  <Badge variant="outline" className="uppercase text-[10px]">
+                    {activeSitecoreCopy.prodBadge}
+                  </Badge>
+                </div>
+                <CardDescription>
+                  {activeSitecoreCopy.description}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2">
+                  <Select
+                    value={sitecoreLanguage}
+                    onValueChange={(value) =>
+                      setSitecoreLanguage(value as "en" | "fr")
+                    }
+                  >
+                    <SelectTrigger className="w-full sm:w-[130px] bg-background/40">
+                      <SelectValue
+                        placeholder={activeSitecoreCopy.languagePlaceholder}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="en">EN</SelectItem>
+                      <SelectItem value="fr">FR</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fetchResidenceSelector(sitecoreLanguage)}
+                    className="gap-2"
+                    disabled={isFetchingSitecore}
+                  >
+                    {isFetchingSitecore ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {activeSitecoreCopy.loadingButton}
+                      </>
+                    ) : (
+                      activeSitecoreCopy.loadButton
+                    )}
+                  </Button>
+                </div>
+                <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-left text-sm">
+                  <p className="font-medium text-foreground/80">
+                    {activeSitecoreCopy.workflowTitle}
+                  </p>
+                  <ul className="mt-2 list-disc pl-4 text-muted-foreground">
+                    {activeSitecoreCopy.workflowSteps.map((step) => (
+                      <li key={step}>{step}</li>
+                    ))}
+                  </ul>
+                </div>
+                <ChatBotDownloadResDataSection
+                  residences={sitecoreResidences}
+                  language={sitecoreLanguage}
+                />
+              </CardContent>
+            </Card>
           </div>
         )}
       </div>
