@@ -276,7 +276,7 @@ Deno.serve(async (req) => {
     : 7;
   const limit = Number.isFinite(body.limit)
     ? Math.max(1, Math.floor(body.limit as number))
-    : 25;
+    : 100;
   const force = body.force === true;
   const minDaysSince = Number.isFinite(body.min_days_since)
     ? Math.max(0, Math.floor(body.min_days_since as number))
