@@ -27,7 +27,7 @@ type ResidenceItem = {
 
   livingOption?: string[];
   livingOptions?: Array<{
-    id: string;
+    id?: string;
     field?: { value?: string };
     careServiceName?: { value?: string };
   }>;
