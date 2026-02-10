@@ -3,6 +3,7 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Check, Trash2 } from "lucide-react";
+import { InfoDialog } from "./InfoDialog";
 
 type CommonWord = {
   word: string;
@@ -87,8 +88,28 @@ export function CommonWordsSection({
   return (
     <section id="analytics-common-words" className="space-y-4">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold">Common user words</h2>
+          <InfoDialog
+            title="Common user words"
+            summary="Most frequent words used by visitors, separated by language."
+          >
+            <p>
+              <span className="font-medium text-foreground">What it shows:</span>{" "}
+              The top 50 words in user messages for English and French after
+              stopword filtering.
+            </p>
+            <p>
+              <span className="font-medium text-foreground">How it is collected:</span>{" "}
+              The refresh job tokenizes <span className="font-medium">chat_messages</span>{" "}
+              (user role), lowercases and strips punctuation, excludes stopwords,
+              and counts frequency by session language.
+            </p>
+            <p>
+              <span className="font-medium text-foreground">Update frequency:</span>{" "}
+              Updated on demand when an admin clicks "Refresh words."
+            </p>
+          </InfoDialog>
         </div>
         {isAdmin ? (
           <Button
