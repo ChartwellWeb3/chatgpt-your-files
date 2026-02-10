@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InfoDialog } from "./InfoDialog";
 
 type Stopword = {
   id: number;
@@ -86,7 +87,28 @@ export function StopwordsSection({
   return (
     <section id="analytics-stopwords" className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">Stopwords</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold">Stopwords</h2>
+          <InfoDialog
+            title="Stopwords"
+            summary="Words excluded from the common-word analysis."
+          >
+            <p>
+              <span className="font-medium text-foreground">What it shows:</span>{" "}
+              A curated list of words that should be ignored when calculating
+              common user words.
+            </p>
+            <p>
+              <span className="font-medium text-foreground">How it is collected:</span>{" "}
+              Managed manually by admins in <span className="font-medium">chat_stopwords</span>.
+            </p>
+            <p>
+              <span className="font-medium text-foreground">Update frequency:</span>{" "}
+              Changes are immediate in this list, and take effect in the common
+              words after the next refresh.
+            </p>
+          </InfoDialog>
+        </div>
         <p className="text-xs text-muted-foreground">
           These words are excluded from the common-word lists.
         </p>

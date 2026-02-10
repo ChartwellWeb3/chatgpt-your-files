@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { useState } from "react";
 import { MiniBarChart, type ChartItem } from "./MiniBarChart";
 import { DateRangePicker } from "./DateRangePicker";
+import { InfoDialog } from "./InfoDialog";
 
 type OverviewCounts = {
   visitors: number;
@@ -157,7 +158,33 @@ Output rules:
         </div>
       ) : null}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Overview</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold">Overview</h2>
+          <InfoDialog
+            title="Overview metrics"
+            summary="High-level usage and conversion metrics for the selected date range."
+          >
+            <p>
+              <span className="font-medium text-foreground">What it shows:</span>{" "}
+              Visitor counts, interactions, average interactions per visitor,
+              form submissions, corporate vs residence split, and multi-message
+              engagement.
+            </p>
+            <p>
+              <span className="font-medium text-foreground">How it is collected:</span>{" "}
+              Aggregated from <span className="font-medium">visitors</span>,{" "}
+              <span className="font-medium">chat_sessions</span>,{" "}
+              <span className="font-medium">chat_messages</span>, and{" "}
+              <span className="font-medium">visitor_forms</span>. Corporate vs
+              residence uses the session residence identifier.
+            </p>
+            <p>
+              <span className="font-medium text-foreground">Update frequency:</span>{" "}
+              Calculated on demand when you load, refresh, or change the date
+              range.
+            </p>
+          </InfoDialog>
+        </div>
         <div className="w-[260px]">
           <DateRangePicker
             startDate={startDate}
@@ -236,10 +263,33 @@ Output rules:
       </div>
 
       <Card className="p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">
-              AI-driven analyzer
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                AI-driven analyzer
+              </div>
+              <InfoDialog
+                title="AI analyzer summary"
+                summary="Sentiment and satisfaction scores based on automated conversation analysis."
+              >
+                <p>
+                  <span className="font-medium text-foreground">What it shows:</span>{" "}
+                  Counts of satisfied, neutral, and angry visitors plus the
+                  average satisfaction score, using the latest analysis per
+                  visitor.
+                </p>
+                <p>
+                  <span className="font-medium text-foreground">How it is collected:</span>{" "}
+                  A scheduled job sends full chat transcripts to the analyzer
+                  and stores results in <span className="font-medium">chat_visitor_analyses</span>.
+                </p>
+                <p>
+                  <span className="font-medium text-foreground">Update frequency:</span>{" "}
+                  Runs daily at 02:00 (database time) and processes up to 150
+                  visitors per run.
+                </p>
+              </InfoDialog>
             </div>
             <div className="text-sm text-muted-foreground">
               Sentiment counts and average satisfaction from the latest analysis per visitor.
@@ -296,6 +346,31 @@ Output rules:
         </div>
       </Card>
 
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold">Top content</h3>
+          <InfoDialog
+            title="Top content"
+            summary="Most common pages, residences, and languages in chat sessions."
+          >
+            <p>
+              <span className="font-medium text-foreground">What it shows:</span>{" "}
+              Top 5 pages, residences, and languages by session count for the
+              selected range.
+            </p>
+            <p>
+              <span className="font-medium text-foreground">How it is collected:</span>{" "}
+              Aggregated from <span className="font-medium">chat_sessions</span>{" "}
+              (page URL, residence id, and language) with residence names
+              resolved from <span className="font-medium">residences</span>.
+            </p>
+            <p>
+              <span className="font-medium text-foreground">Update frequency:</span>{" "}
+              Calculated on demand when you refresh or change the date range.
+            </p>
+          </InfoDialog>
+        </div>
+      </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-4 space-y-4">
           <MiniBarChart title="Top pages" items={topPages} />
