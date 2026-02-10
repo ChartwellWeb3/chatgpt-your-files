@@ -192,8 +192,8 @@ export default function ChatAnalyticsOverviewPage() {
         100
       : 0;
   const formCompletionPct =
-    overviewSummary.totalForms > 0
-      ? (overviewSummary.submittedForms / overviewSummary.totalForms) * 100
+    overviewSummary.visitors > 0
+      ? (overviewSummary.submittedForms / overviewSummary.visitors) * 100
       : 0;
 
   // const bookTourRows = bookTourFormsQuery.data ?? [];

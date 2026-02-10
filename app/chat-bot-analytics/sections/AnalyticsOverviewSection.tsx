@@ -47,7 +47,7 @@ export function AnalyticsOverviewSection({
   setStartDate,
   setEndDate,
   overviewCounts,
-  // formCompletionPct,
+  formCompletionPct,
   corporateSessions,
   residenceSessions,
   corporateSessionPct,
@@ -225,9 +225,20 @@ Output rules:
           <div className="text-2xl font-semibold">
             {overviewCounts.submittedForms}
           </div>
-          {/* <div className="text-xs text-muted-foreground mt-1">
-            Completion: {formCompletionPct.toFixed(0)}%
-          </div> */}
+          <div className="text-xs text-muted-foreground mt-1">
+            of {overviewCounts.totalForms} total
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs text-muted-foreground">
+            Form submission rate
+          </div>
+          <div className="text-2xl font-semibold">
+            {formCompletionPct.toFixed(0)}%
+          </div>
+          <div className="text-xs text-muted-foreground mt-1">
+            submitted vs visitors
+          </div>
         </Card>
         <Card className="p-4">
           <div className="text-xs text-muted-foreground">
