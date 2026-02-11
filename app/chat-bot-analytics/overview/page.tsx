@@ -8,6 +8,7 @@ import { RefreshCcw } from "lucide-react";
 import { AnalyticsOverviewSection } from "../sections/AnalyticsOverviewSection";
 import { CommonWordsSection } from "../sections/CommonWordsSection";
 import { StopwordsSection } from "../sections/StopwordsSection";
+import { MonthlyInsightsSection } from "../sections/MonthlyInsightsSection";
 import { useProfileLevel } from "@/app/hooks/useProfileLevel";
 // import { AnalyticsFormsSection } from "../sections/AnalyticsFormsSection";
 import { type ChartItem } from "../sections/MiniBarChart";
@@ -358,6 +359,8 @@ export default function ChatAnalyticsOverviewPage() {
         topLangs={overviewSummary.topLangs}
         aiSummary={aiSummaryQuery.data ?? null}
       />
+
+      <MonthlyInsightsSection isAdmin={isAdmin} />
 
       <CommonWordsSection
         isAdmin={isAdmin}
