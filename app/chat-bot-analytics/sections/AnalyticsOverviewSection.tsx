@@ -366,14 +366,17 @@ Output rules:
           >
             <p>
               <span className="font-medium text-foreground">What it shows:</span>{" "}
-              Top 5 pages, residences, and languages by session count for the
-              selected range.
+              Top 5 pages and residences by session count, plus languages by
+              unique visitors for the selected range.
             </p>
             <p>
               <span className="font-medium text-foreground">How it is collected:</span>{" "}
-              Aggregated from <span className="font-medium">chat_sessions</span>{" "}
-              (page URL, residence id, and language) with residence names
-              resolved from <span className="font-medium">residences</span>.
+              Pages and residences are aggregated from{" "}
+              <span className="font-medium">chat_sessions</span> (page URL and
+              residence id) with residence names resolved from{" "}
+              <span className="font-medium">residences</span>. Languages are
+              counted once per visitor using the latest session language in the
+              selected range.
             </p>
             <p>
               <span className="font-medium text-foreground">Update frequency:</span>{" "}
