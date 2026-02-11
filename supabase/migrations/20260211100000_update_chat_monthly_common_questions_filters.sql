@@ -51,7 +51,8 @@ as $$
           'g'
         )
       ) as question,
-      left(coalesce(content, ''), 240) as example
+      left(coalesce(content, ''), 240) as example,
+      position('?' in coalesce(content, '')) > 0 as has_question_mark
     from filtered
   ),
   ranked as (
@@ -67,6 +68,11 @@ as $$
       ) as rn
     from normalized
     where length(question) > 2
+      and (
+        has_question_mark
+        or array_length(string_to_array(question, ' '), 1) >= 3
+        or question ~* '^(what|how|where|when|why|which|who|do|does|did|is|are|can|could|would|should|may|will|quel|quelle|quels|quelles|comment|ou|où|quand|pourquoi|combien|est ce|est ce que|peut|pouvez|puis je|dois je)\b'
+      )
     group by page_type, lang, question
   )
   select page_type, lang, question, example, freq

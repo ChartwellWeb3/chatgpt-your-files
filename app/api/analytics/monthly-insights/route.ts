@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 const PROMPT_VERSION = "v1";
 const MODEL_FALLBACK = "gpt-5.2";
-const PAGE_TYPES = ["corporate", "residence", "find_a_residence"] as const;
+const PAGE_TYPES = ["corporate", "residence"] as const;
 
 type PageType = (typeof PAGE_TYPES)[number];
 
@@ -97,8 +97,9 @@ Use ONLY this list. Do not invent facts or company details.
 
 Rules:
 - Keep each item short (<= 12 words).
-  - If not enough evidence for a list, return an empty array.
-  - Do not include extra keys or commentary.
+- If not enough evidence for a list, return an empty array.
+- Ignore greetings, acknowledgements, or non-question fragments. Only output clear user questions and intents.
+- Do not include extra keys or commentary.
 
 Questions:
 ${lines}
@@ -290,5 +291,60 @@ export async function POST(req: Request) {
     lang,
     processed: results.filter((r) => r.ok).length,
     results,
+  });
+}
+
+export async function DELETE(req: Request) {
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+    error: userErr,
+  } = await supabase.auth.getUser();
+
+  if (userErr || !user) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data: isAdmin, error: adminErr } = await supabase.rpc("is_admin");
+  if (adminErr) {
+    return NextResponse.json({ ok: false, error: adminErr.message }, { status: 500 });
+  }
+  if (!isAdmin) {
+    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const month = typeof body?.month === "string" ? body.month.trim() : "";
+  const langRaw = typeof body?.lang === "string" ? body.lang.trim() : "";
+  const lang = langRaw.toLowerCase();
+  const parsedMonth = parseMonth(month);
+  if (!parsedMonth) {
+    return NextResponse.json(
+      { ok: false, error: "Invalid month. Use YYYY-MM." },
+      { status: 400 }
+    );
+  }
+  if (lang !== "en" && lang !== "fr") {
+    return NextResponse.json(
+      { ok: false, error: "Invalid language. Use 'en' or 'fr'." },
+      { status: 400 }
+    );
+  }
+
+  const { error: deleteErr, count } = await supabase
+    .from("chat_monthly_insights")
+    .delete({ count: "exact" })
+    .eq("month", parsedMonth.startDate)
+    .eq("lang", lang);
+
+  if (deleteErr) {
+    return NextResponse.json({ ok: false, error: deleteErr.message }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    month: parsedMonth.label,
+    lang,
+    deleted: count ?? 0,
   });
 }

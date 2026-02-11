@@ -52,6 +52,7 @@ Return JSON only with keys:
 Rules:
 - Keep each item short (<= 12 words).
 - If not enough evidence for a list, return an empty array.
+- Ignore greetings, acknowledgements, or non-question fragments. Only output clear user questions and intents.
 - Do not include extra keys or commentary.
 
 Questions:
@@ -106,12 +107,13 @@ export function MonthlyInsightsSection({ isAdmin }: MonthlyInsightsSectionProps)
   const [existingInsights, setExistingInsights] = useState<InsightRow[]>([]);
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [existingError, setExistingError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [promptOpen, setPromptOpen] = useState(false);
   const [promptText, setPromptText] = useState("");
   const [promptVersion, setPromptVersion] = useState("");
   const [lang, setLang] = useState<"en" | "fr">("en");
 
-  const pageOrder = ["corporate", "residence", "find_a_residence"] as const;
+  const pageOrder = ["corporate", "residence"] as const;
 
   const hasExisting = existingInsights.length > 0;
 
@@ -205,6 +207,39 @@ export function MonthlyInsightsSection({ isAdmin }: MonthlyInsightsSectionProps)
     }
   };
 
+  const deleteInsights = async () => {
+    if (!month) {
+      setError("Select a month.");
+      return;
+    }
+    if (!hasExisting) return;
+    const confirmed = window.confirm(
+      `Delete monthly insights for ${formatMonthLabel(month)} (${lang.toUpperCase()})?`
+    );
+    if (!confirmed) return;
+    setDeleting(true);
+    setError(null);
+    setResult(null);
+    setExistingError(null);
+    try {
+      const res = await fetch("/api/analytics/monthly-insights", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month, lang }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "Failed to delete monthly insights.");
+      }
+      setExistingInsights([]);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to delete.";
+      setError(message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const processed = result?.processed ?? 0;
   const existingByType = useMemo(() => {
     const map = new Map<string, InsightRow>();
@@ -246,7 +281,7 @@ export function MonthlyInsightsSection({ isAdmin }: MonthlyInsightsSectionProps)
             <h2 className="text-lg font-semibold">Monthly insights</h2>
             <InfoDialog
               title="Monthly insights"
-              summary="Run a month-based OpenAI summary for corporate, residence, and find-a-residence pages."
+              summary="Run a month-based OpenAI summary for corporate and residence pages."
             >
               <p>
                 <span className="font-medium text-foreground">What it does:</span>{" "}
@@ -312,6 +347,16 @@ export function MonthlyInsightsSection({ isAdmin }: MonthlyInsightsSectionProps)
           >
             {running ? "Running..." : "Run monthly insights"}
           </Button>
+          {hasExisting ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={deleteInsights}
+              disabled={!isAdmin || deleting || loadingExisting}
+            >
+              {deleting ? "Deleting..." : "Delete records"}
+            </Button>
+          ) : null}
           {hasExisting ? <span>{pill("Generated", "ok")}</span> : null}
           {loadingExisting ? <span>{pill("Loading…", "warning")}</span> : null}
           {!isAdmin ? (
@@ -350,7 +395,7 @@ export function MonthlyInsightsSection({ isAdmin }: MonthlyInsightsSectionProps)
         </div>
 
         {hasExisting ? (
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-2">
             {pageOrder.map((pageType) => {
               const row = existingByType.get(pageType);
               if (!row) {
