@@ -28,6 +28,7 @@ import {
   Loader2,
   Download,
   ArrowLeft,
+  RefreshCw,
 } from "lucide-react";
 import { useState, useRef, useMemo, useEffect } from "react";
 import JSZip from "jszip";
@@ -77,6 +78,7 @@ export default function DashboardPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
+  const [isReembedding, setIsReembedding] = useState(false);
 
   const sitecoreCopy = useMemo(
     () => ({
@@ -517,6 +519,44 @@ export default function DashboardPage() {
     }
   };
 
+  const reembedMissing = async () => {
+    if (!selectedResidence) {
+      toast({ description: "Select a residence first" });
+      return;
+    }
+
+    setIsReembedding(true);
+    try {
+      const { data, error } = await supabase.rpc(
+        "reembed_missing_document_sections",
+        {
+          p_residence_custom_id: selectedResidence.custom_id,
+          p_limit: 200,
+        },
+      );
+
+      if (error) throw error;
+
+      const updatedCount = typeof data === "number" ? data : 0;
+      toast({
+        description:
+          updatedCount > 0
+            ? `Queued ${updatedCount} section${
+                updatedCount !== 1 ? "s" : ""
+              } for re-embedding`
+            : "No missing embeddings found",
+      });
+    } catch (error) {
+      console.error(error);
+      toast({
+        variant: "destructive",
+        description: "Failed to re-embed missing sections",
+      });
+    } finally {
+      setIsReembedding(false);
+    }
+  };
+
   const deleteDocument = async (doc: Document) => {
     if (!confirm("Delete this file?")) return;
 
@@ -778,6 +818,15 @@ export default function DashboardPage() {
                         {isBulkDownloading
                           ? "Preparing..."
                           : "Download Residence"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={reembedMissing}
+                        className="gap-2"
+                        disabled={isReembedding}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        {isReembedding ? "Re-embedding..." : "Re-embed Missing"}
                       </Button>
                       <Button
                         onClick={() => fileInputRef.current?.click()}
