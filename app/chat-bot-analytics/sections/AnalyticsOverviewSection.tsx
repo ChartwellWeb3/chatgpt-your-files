@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useState } from "react";
+import { PieChart, Pie, Cell, Tooltip, type TooltipProps } from "recharts";
 import { MiniBarChart, type ChartItem } from "./MiniBarChart";
 import { DateRangePicker } from "./DateRangePicker";
 import { InfoDialog } from "./InfoDialog";
@@ -132,25 +133,129 @@ export function AnalyticsOverviewSection({
     { key: "lt2d", label: "1d–2d" },
     { key: "gte2d", label: "≥ 2d" },
   ];
-  const formatBucket = (
-    row?: { count: number; avgSeconds: number } | null
+  const bucketColors = [
+    "#22c55e",
+    "#38bdf8",
+    "#f59e0b",
+    "#a855f7",
+    "#ef4444",
+    "#14b8a6",
+    "#f97316",
+  ];
+  type BucketSlice = {
+    key: string;
+    label: string;
+    value: number;
+    avgSeconds: number;
+    color: string;
+  };
+  const buildBucketData = (
+    buckets: Record<string, { count: number; avgSeconds: number }>
   ) => {
-    if (!row || row.count === 0) return "0 conv";
-    return `${row.count} conv · avg ${formatDuration(row.avgSeconds)}`;
+    return bucketLabels
+      .map((bucket, idx) => ({
+        key: bucket.key,
+        label: bucket.label,
+        value: buckets[bucket.key]?.count ?? 0,
+        avgSeconds: buckets[bucket.key]?.avgSeconds ?? 0,
+        color: bucketColors[idx % bucketColors.length],
+      }))
+      .filter((item) => item.value > 0);
+  };
+  const renderBucketTooltip = (
+    props: TooltipProps<number, string>
+  ) => {
+    const { active, payload } = props;
+    if (!active || !payload?.length) return null;
+    const item = payload[0]?.payload as BucketSlice | undefined;
+    if (!item) return null;
+    return (
+      <div className="rounded-md border border-border bg-card px-3 py-2 text-sm shadow">
+        <div className="font-semibold">{item.label}</div>
+        <div className="text-muted-foreground">{item.value} conv</div>
+        <div className="text-muted-foreground">
+          avg {formatDuration(item.avgSeconds)}
+        </div>
+      </div>
+    );
+  };
+  const renderPieLabel = (props: {
+    cx: number;
+    cy: number;
+    midAngle: number;
+    innerRadius: number;
+    outerRadius: number;
+    value: number;
+  }) => {
+    const { cx, cy, midAngle, innerRadius, outerRadius, value } = props;
+    if (!value) return null;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.6;
+    const angle = (-midAngle * Math.PI) / 180;
+    const x = cx + radius * Math.cos(angle);
+    const y = cy + radius * Math.sin(angle);
+    return (
+      <text
+        x={x}
+        y={y}
+        textAnchor="middle"
+        dominantBaseline="central"
+        className="fill-white text-[14px] font-semibold"
+      >
+        {value}
+      </text>
+    );
   };
   const renderBuckets = (section: keyof typeof bucketSummary) => {
     const buckets = bucketSummary?.[section] ?? {};
+    const data = buildBucketData(buckets);
+    const total = data.reduce((sum, item) => sum + item.value, 0);
     return (
-      <div className="mt-3 space-y-2 text-xs">
-        <div className="text-muted-foreground">Buckets (count · avg)</div>
-        <div className="space-y-1">
-          {bucketLabels.map((bucket) => (
+      <div className="mt-3">
+        <div className="text-sm text-muted-foreground">
+          Bucket share (hover a slice)
+        </div>
+        <div className="mt-2 flex items-center justify-center">
+          {total ? (
+            <PieChart width={400} height={400}>
+              <Pie
+                data={data}
+                dataKey="value"
+                nameKey="label"
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={140}
+                paddingAngle={1}
+                label={renderPieLabel}
+                labelLine={false}
+              >
+                {data.map((entry) => (
+                  <Cell
+                    key={`slice-${section}-${entry.key}`}
+                    fill={entry.color}
+                  />
+                ))}
+              </Pie>
+              <Tooltip content={renderBucketTooltip} cursor={false} />
+            </PieChart>
+          ) : (
+            <div className="h-[400px] w-[400px] rounded-full border border-border/60 bg-muted/20 flex items-center justify-center text-xs text-muted-foreground">
+              No data
+            </div>
+          )}
+        </div>
+      
+        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[10px]">
+          {bucketLabels.map((bucket, idx) => (
             <div
-              key={`${section}-${bucket.key}`}
-              className="flex items-center justify-between gap-2"
+              key={`${section}-legend-${bucket.key}`}
+              className="inline-flex items-center gap-1 text-muted-foreground"
             >
-              <span className="text-muted-foreground">{bucket.label}</span>
-              <span className="font-medium">{formatBucket(buckets[bucket.key])}</span>
+              <span
+                className="h-2 w-2 rounded-sm"
+                style={{ background: bucketColors[idx % bucketColors.length] }}
+              />
+              <span>{bucket.label}</span>
             </div>
           ))}
         </div>
@@ -362,6 +467,27 @@ Output rules:
       <div className="space-y-2">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold">Conversation duration</h3>
+          <InfoDialog
+            title="Conversation duration"
+            summary="Average duration and bucket breakdown for conversations."
+          >
+            <p>
+              <span className="font-medium text-foreground">What it shows:</span>{" "}
+              Average duration per visitor (latest conversation) plus a bucketed
+              distribution of counts and averages by time ranges.
+            </p>
+            <p>
+              <span className="font-medium text-foreground">How it is collected:</span>{" "}
+              Duration is calculated as first message → last message for the
+              latest conversation snapshot per visitor, based on stored
+              duration runs.
+            </p>
+            <p>
+              <span className="font-medium text-foreground">Tips:</span>{" "}
+              Use the hover on pie slices to see bucket counts and average
+              duration within each range.
+            </p>
+          </InfoDialog>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card className="p-4">
