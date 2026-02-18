@@ -3,7 +3,14 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useState } from "react";
-import { PieChart, Pie, Cell, Tooltip, type TooltipProps } from "recharts";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  type TooltipProps,
+  type PieLabelRenderProps,
+} from "recharts";
 import { MiniBarChart, type ChartItem } from "./MiniBarChart";
 import { DateRangePicker } from "./DateRangePicker";
 import { InfoDialog } from "./InfoDialog";
@@ -179,16 +186,20 @@ export function AnalyticsOverviewSection({
       </div>
     );
   };
-  const renderPieLabel = (props: {
-    cx: number;
-    cy: number;
-    midAngle: number;
-    innerRadius: number;
-    outerRadius: number;
-    value: number;
-  }) => {
-    const { cx, cy, midAngle, innerRadius, outerRadius, value } = props;
-    if (!value) return null;
+  const renderPieLabel = (props: PieLabelRenderProps) => {
+    const { cx, cy, midAngle, innerRadius, outerRadius, percent } = props;
+    if (
+      typeof cx !== "number" ||
+      typeof cy !== "number" ||
+      typeof midAngle !== "number" ||
+      typeof innerRadius !== "number" ||
+      typeof outerRadius !== "number" ||
+      typeof percent !== "number"
+    ) {
+      return null;
+    }
+    const pct = Math.round(percent * 100);
+    if (pct <= 0) return null;
     const radius = innerRadius + (outerRadius - innerRadius) * 0.6;
     const angle = (-midAngle * Math.PI) / 180;
     const x = cx + radius * Math.cos(angle);
@@ -201,7 +212,7 @@ export function AnalyticsOverviewSection({
         dominantBaseline="central"
         className="fill-white text-[14px] font-semibold"
       >
-        {value}
+        {pct}%
       </text>
     );
   };
