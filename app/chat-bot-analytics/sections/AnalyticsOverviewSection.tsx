@@ -39,6 +39,24 @@ type OverviewProps = {
     avgScore: number;
     total: number;
   } | null;
+  durationSummary?: {
+    avgSeconds: number;
+    total: number;
+  } | null;
+  durationBySentiment?: {
+    satisfiedAvgSeconds: number;
+    neutralAvgSeconds: number;
+    angryAvgSeconds: number;
+    satisfiedTotal: number;
+    neutralTotal: number;
+    angryTotal: number;
+  } | null;
+  durationBuckets?: {
+    overall: Record<string, { count: number; avgSeconds: number }>;
+    satisfied: Record<string, { count: number; avgSeconds: number }>;
+    neutral: Record<string, { count: number; avgSeconds: number }>;
+    angry: Record<string, { count: number; avgSeconds: number }>;
+  } | null;
 };
 
 export function AnalyticsOverviewSection({
@@ -59,6 +77,9 @@ export function AnalyticsOverviewSection({
   topResidences,
   topLangs,
   aiSummary,
+  durationSummary,
+  durationBySentiment,
+  durationBuckets,
 }: OverviewProps) {
   const [promptOpen, setPromptOpen] = useState(false);
   const [promptText, setPromptText] = useState("");
@@ -70,9 +91,72 @@ export function AnalyticsOverviewSection({
     avgScore: 0,
     total: 0,
   };
+  const duration = durationSummary ?? { avgSeconds: 0, total: 0 };
+  const durationSentiment = durationBySentiment ?? {
+    satisfiedAvgSeconds: 0,
+    neutralAvgSeconds: 0,
+    angryAvgSeconds: 0,
+    satisfiedTotal: 0,
+    neutralTotal: 0,
+    angryTotal: 0,
+  };
+  const bucketSummary = durationBuckets ?? {
+    overall: {},
+    satisfied: {},
+    neutral: {},
+    angry: {},
+  };
   const aiTotal = ai.total || 0;
   const pct = (value: number) =>
     aiTotal ? `${Math.round((value / aiTotal) * 100)}%` : "0%";
+  const formatDuration = (seconds: number) => {
+    if (!Number.isFinite(seconds) || seconds <= 0) return "0s";
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    const totalMinutes = Math.round(seconds / 60);
+    if (totalMinutes < 60) return `${totalMinutes}m`;
+    const totalHours = Math.floor(totalMinutes / 60);
+    const remMinutes = totalMinutes % 60;
+    if (totalHours < 24) {
+      return remMinutes ? `${totalHours}h ${remMinutes}m` : `${totalHours}h`;
+    }
+    const totalDays = Math.floor(totalHours / 24);
+    const remHours = totalHours % 24;
+    return remHours ? `${totalDays}d ${remHours}h` : `${totalDays}d`;
+  };
+  const bucketLabels: Array<{ key: string; label: string }> = [
+    { key: "lt1m", label: "< 1m" },
+    { key: "lt10m", label: "1–10m" },
+    { key: "lt30m", label: "10–30m" },
+    { key: "lt1h", label: "30m–1h" },
+    { key: "lt1d", label: "1h–1d" },
+    { key: "lt2d", label: "1d–2d" },
+    { key: "gte2d", label: "≥ 2d" },
+  ];
+  const formatBucket = (
+    row?: { count: number; avgSeconds: number } | null
+  ) => {
+    if (!row || row.count === 0) return "0 conv";
+    return `${row.count} conv · avg ${formatDuration(row.avgSeconds)}`;
+  };
+  const renderBuckets = (section: keyof typeof bucketSummary) => {
+    const buckets = bucketSummary?.[section] ?? {};
+    return (
+      <div className="mt-3 space-y-2 text-xs">
+        <div className="text-muted-foreground">Buckets (count · avg)</div>
+        <div className="space-y-1">
+          {bucketLabels.map((bucket) => (
+            <div
+              key={`${section}-${bucket.key}`}
+              className="flex items-center justify-between gap-2"
+            >
+              <span className="text-muted-foreground">{bucket.label}</span>
+              <span className="font-medium">{formatBucket(buckets[bucket.key])}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
   const promptByVersion: Record<string, string> = {
     v1: `
 You are an analyst evaluating a visitor's full chatbot conversation for ANY client/domain.
@@ -167,16 +251,18 @@ Output rules:
             <p>
               <span className="font-medium text-foreground">What it shows:</span>{" "}
               Visitor counts, interactions, average interactions per visitor,
-              form submissions, corporate vs residence split, and multi-message
-              engagement.
+              form submissions, corporate vs residence split, multi-message
+              engagement, and average conversation duration.
             </p>
             <p>
               <span className="font-medium text-foreground">How it is collected:</span>{" "}
               Aggregated from <span className="font-medium">visitors</span>,{" "}
               <span className="font-medium">chat_sessions</span>,{" "}
               <span className="font-medium">chat_messages</span>, and{" "}
-              <span className="font-medium">visitor_forms</span>. Corporate vs
-              residence uses the session residence identifier.
+              <span className="font-medium">visitor_forms</span>, plus
+              <span className="font-medium"> chat_visitor_durations</span> for
+              duration metrics. Corporate vs residence uses the session
+              residence identifier.
             </p>
             <p>
               <span className="font-medium text-foreground">Update frequency:</span>{" "}
@@ -271,6 +357,74 @@ Output rules:
             {multiSessionMessageVisitorPct.toFixed(0)}% of visitors
           </div>
         </Card>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold">Conversation duration</h3>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Card className="p-4">
+            <div className="text-xs text-muted-foreground">
+              Avg conversation duration
+            </div>
+            <div className="text-2xl font-semibold">
+              {formatDuration(duration.avgSeconds)}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              from {duration.total} conversations
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              Latest per visitor; duration = first → last message.
+            </div>
+            {renderBuckets("overall")}
+          </Card>
+          <Card className="p-4">
+            <div className="text-xs text-muted-foreground">
+              Avg duration (Satisfied)
+            </div>
+            <div className="text-2xl font-semibold text-emerald-400">
+              {formatDuration(durationSentiment.satisfiedAvgSeconds)}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              from {durationSentiment.satisfiedTotal} conversations
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              Latest analyzed per visitor; duration = first → last message.
+            </div>
+            {renderBuckets("satisfied")}
+          </Card>
+          <Card className="p-4">
+            <div className="text-xs text-muted-foreground">
+              Avg duration (Neutral)
+            </div>
+            <div className="text-2xl font-semibold text-yellow-400">
+              {formatDuration(durationSentiment.neutralAvgSeconds)}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              from {durationSentiment.neutralTotal} conversations
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              Latest analyzed per visitor; duration = first → last message.
+            </div>
+            {renderBuckets("neutral")}
+          </Card>
+          <Card className="p-4">
+            <div className="text-xs text-muted-foreground">
+              Avg duration (Angry)
+            </div>
+            <div className="text-2xl font-semibold text-red-400">
+              {formatDuration(durationSentiment.angryAvgSeconds)}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              from {durationSentiment.angryTotal} conversations
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              Latest analyzed per visitor; duration = first → last message.
+            </div>
+            {renderBuckets("angry")}
+          </Card>
+        </div>
       </div>
 
       <Card className="p-4 space-y-4">

@@ -61,3 +61,13 @@ export type VisitorAnalysisRow = {
   evidence_key_quotes?: string[] | null;
   created_at: string;
 };
+
+export type VisitorDurationRow = {
+  id: number;
+  visitor_id: string;
+  first_message_at: string;
+  last_message_at: string;
+  duration_seconds: number;
+  source: "auto" | "manual";
+  created_at: string;
+};
