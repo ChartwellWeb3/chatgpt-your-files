@@ -35,7 +35,9 @@ export async function POST(req: Request) {
   const cutoffDays = Number.isFinite(body.cutoff_days)
     ? Math.max(1, Math.floor(body.cutoff_days as number))
     : 0;
-  const limit = 350;
+  const limit = Number.isFinite(body.limit)
+    ? Math.max(1, Math.floor(body.limit as number))
+    : 150;
   const force = body.force === true;
   const minDaysSince = Number.isFinite(body.min_days_since)
     ? Math.max(0, Math.floor(body.min_days_since as number))
