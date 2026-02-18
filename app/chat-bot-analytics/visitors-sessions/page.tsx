@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { createClient } from "../../utils/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { RefreshCcw } from "lucide-react";
+import { Clock, Loader2, RefreshCcw } from "lucide-react";
 import { useReplay } from "../../hooks/useReplay";
 import { useDeleteVisitor } from "../../hooks/useDeleteVisitor";
 import { useProfileLevel } from "../../hooks/useProfileLevel";
@@ -16,6 +16,7 @@ import type {
   SourceRow,
   VisitorRow,
   VisitorAnalysisRow,
+  VisitorDurationRow,
 } from "../../types/types";
 import { useSearchParams } from "next/navigation";
 
@@ -111,7 +112,8 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
       visitors: VisitorRow[];
       totalCount: number | null;
     }> => {
-      const limit = (visitorPage + 1) * PAGE_SIZE;
+      const limit = PAGE_SIZE;
+      const offset = visitorPage * PAGE_SIZE;
       const { data, error } = await supabase.rpc(
         "analytics_visitors_filtered",
         {
@@ -119,7 +121,7 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
           p_start_date: startDate || null,
           p_end_date: endDate ? `${endDate} 23:59:59` : null,
           p_limit: limit,
-          p_offset: 0,
+          p_offset: offset,
         }
       );
 
@@ -145,9 +147,10 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
   // stable reference
   const visitors = visitorsQuery.data?.visitors ?? EMPTY_VISITORS;
   const totalVisitors = visitorsQuery.data?.totalCount ?? null;
-
-  const hasMoreVisitors =
-    totalVisitors !== null && visitors.length < totalVisitors;
+  const totalPages =
+    typeof totalVisitors === "number" && totalVisitors > 0
+      ? Math.max(1, Math.ceil(totalVisitors / PAGE_SIZE))
+      : 1;
 
   // derived effective visitor id
   const effectiveVisitorId = useMemo(
@@ -206,6 +209,24 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
     },
   });
 
+  const durationsQuery = useQuery({
+    queryKey: ["analytics-visitor-durations", analysisVisitorIds],
+    enabled: analysisVisitorIds.length > 0,
+    queryFn: async (): Promise<VisitorDurationRow[]> => {
+      const { data, error } = await supabase
+        .from("chat_visitor_durations")
+        .select(
+          "id,visitor_id,first_message_at,last_message_at,duration_seconds,source,created_at"
+        )
+        .in("visitor_id", analysisVisitorIds)
+        .eq("source", "auto")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []) as VisitorDurationRow[];
+    },
+  });
+
   const analysisByVisitor = useMemo(() => {
     const map = new Map<string, VisitorAnalysisRow>();
     const hasEvidence = (row: VisitorAnalysisRow) => {
@@ -235,6 +256,16 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
     });
     return map;
   }, [analysesQuery.data, analysisOverrides]);
+
+  const durationByVisitor = useMemo(() => {
+    const map = new Map<string, VisitorDurationRow>();
+    (durationsQuery.data ?? []).forEach((row) => {
+      if (!map.has(row.visitor_id)) {
+        map.set(row.visitor_id, row);
+      }
+    });
+    return map;
+  }, [durationsQuery.data]);
 
   // ---- Forms / booked tours per visitor (date-filtered by submitted_at) ----
   const bookTourFormsQuery = useQuery({
@@ -346,6 +377,11 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
 
   const { deleting: deletingVisitor, deleteVisitor } =
     useDeleteVisitor(supabase);
+
+  const [runningDurations, setRunningDurations] = useState(false);
+  const [runDurationsError, setRunDurationsError] = useState<string | null>(
+    null
+  );
 
   const handleDeleteVisitor = async (visitorId: string) => {
     const res = await deleteVisitor(visitorId);
@@ -574,6 +610,7 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
       sessionsQuery.refetch(),
       reviewRequestsQuery.refetch(),
       analysesQuery.refetch(),
+      durationsQuery.refetch(),
     ]);
   };
 
@@ -595,12 +632,51 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
         </div>
 
         <div className="flex items-end gap-2 flex-wrap">
+          {isAdmin ? (
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={async () => {
+                setRunningDurations(true);
+                setRunDurationsError(null);
+                try {
+                  const res = await fetch("/api/analytics/run-durations", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ cutoff_days: 7, limit: 150 }),
+                  });
+                  const data = await res.json().catch(() => null);
+                  if (!res.ok || !data?.ok) {
+                    throw new Error(data?.error || "Duration run failed");
+                  }
+                  await durationsQuery.refetch();
+                } catch (err: unknown) {
+                  const message =
+                    err instanceof Error ? err.message : "Duration run failed";
+                  setRunDurationsError(message);
+                } finally {
+                  setRunningDurations(false);
+                }
+              }}
+              disabled={runningDurations}
+            >
+              {runningDurations ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Clock className="h-4 w-4" />
+              )}
+              Run durations
+            </Button>
+          ) : null}
           <Button variant="outline" className="gap-2" onClick={refreshAll}>
             <RefreshCcw className="h-4 w-4" />
             Refresh
           </Button>
         </div>
       </div>
+      {runDurationsError ? (
+        <div className="text-sm text-destructive">{runDurationsError}</div>
+      ) : null}
 
       <AnalyticsReplaySection
         isBySession={isBySession}
@@ -616,12 +692,13 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
           setSelectedVisitorId(id);
           setSelectedSessionId("");
         }}
-        hasMoreVisitors={hasMoreVisitors}
+        currentPage={visitorPage}
+        totalPages={totalPages}
+        totalVisitors={totalVisitors}
         isAdmin={isAdmin}
         filteredVisitors={filteredVisitors}
         deleteVisitor={handleDeleteVisitor}
-        setVisitorPage={setVisitorPage}
-        onLoadMoreVisitors={() => setVisitorPage((prev) => prev + 1)}
+        onPageChange={setVisitorPage}
         deleting={deletingVisitor}
         filterOption={filterOption}
         setFilterOption={setFilterOption}
@@ -629,6 +706,7 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
         reviewRequestsByVisitor={reviewRequestsByVisitor}
         onRequestReview={requestReview}
         analysisByVisitor={analysisByVisitor}
+        durationByVisitor={durationByVisitor}
         analysisLoadingVisitorId={analysisLoadingVisitorId}
         analysisError={analysisError}
         onAnalyzeVisitor={analyzeVisitor}

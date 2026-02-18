@@ -11,6 +11,7 @@ import type {
   SourceRow,
   VisitorRow,
   VisitorAnalysisRow,
+  VisitorDurationRow,
   ConversationAnalysis,
 } from "@/app/types/types";
 
@@ -42,12 +43,13 @@ type ReplaySectionProps = {
   setEndDate: (date: string) => void;
   selectedVisitorId: string;
   setSelectedVisitorId: (id: string) => void;
-  hasMoreVisitors: boolean;
+  currentPage: number;
+  totalPages: number;
+  totalVisitors?: number | null;
   isAdmin: boolean;
   filteredVisitors: VisitorRow[];
   deleteVisitor: (id: string) => void;
-  setVisitorPage: (updater: (prev: number) => number) => void;
-  onLoadMoreVisitors: () => void;
+  onPageChange: (page: number) => void;
   deleting: boolean;
   filterOption: FilterOption;
   setFilterOption: (v: FilterOption) => void;
@@ -65,6 +67,7 @@ type ReplaySectionProps = {
   >;
   onRequestReview: (visitorId: string, comment: string) => Promise<void>;
   analysisByVisitor: Map<string, VisitorAnalysisRow>;
+  durationByVisitor: Map<string, VisitorDurationRow>;
   analysisLoadingVisitorId: string | null;
   analysisError: { visitorId: string; message: string } | null;
   onAnalyzeVisitor: (visitorId: string) => Promise<ConversationAnalysis>;
@@ -96,12 +99,13 @@ export function AnalyticsReplaySection({
   setEndDate,
   selectedVisitorId,
   setSelectedVisitorId,
-  hasMoreVisitors,
+  currentPage,
+  totalPages,
+  totalVisitors,
   isAdmin,
   filteredVisitors,
   deleteVisitor,
-  setVisitorPage,
-  onLoadMoreVisitors,
+  onPageChange,
   deleting,
   filterOption,
   setFilterOption,
@@ -109,6 +113,7 @@ export function AnalyticsReplaySection({
   reviewRequestsByVisitor,
   onRequestReview,
   analysisByVisitor,
+  durationByVisitor,
   analysisLoadingVisitorId,
   analysisError,
   onAnalyzeVisitor,
@@ -140,22 +145,24 @@ export function AnalyticsReplaySection({
           setEndDate={setEndDate}
           selectedVisitorId={selectedVisitorId}
           setSelectedVisitorId={setSelectedVisitorId}
-          hasMoreVisitors={hasMoreVisitors}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalVisitors={totalVisitors}
           isAdmin={isAdmin}
           filteredVisitors={filteredVisitors}
           deleteVisitor={deleteVisitor}
-          setVisitorPage={setVisitorPage}
-          onLoadMoreVisitors={onLoadMoreVisitors}
+          onPageChange={onPageChange}
           deleting={deleting}
           filterOption={filterOption}
           setFilterOption={setFilterOption}
           bookTourStatsByVisitor={bookTourStatsByVisitor}
-          reviewRequestsByVisitor={reviewRequestsByVisitor}
-          onRequestReview={onRequestReview}
-          analysisByVisitor={analysisByVisitor}
-          analysisLoadingVisitorId={analysisLoadingVisitorId}
-          onAnalyzeVisitor={onAnalyzeVisitor}
-        />
+        reviewRequestsByVisitor={reviewRequestsByVisitor}
+        onRequestReview={onRequestReview}
+        analysisByVisitor={analysisByVisitor}
+        durationByVisitor={durationByVisitor}
+        analysisLoadingVisitorId={analysisLoadingVisitorId}
+        onAnalyzeVisitor={onAnalyzeVisitor}
+      />
 
         <SessionsSection
           isBySession={isBySession}

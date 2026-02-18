@@ -186,3 +186,8 @@ entrypoint = "./functions/search-vector/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/analyze-conversations/index.ts"
+
+[functions.conversation-durations]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/conversation-durations/index.ts"

@@ -18,7 +18,11 @@ import { fmtDate } from "@/app/helpers/fmtDate";
 import { pill } from "@/components/ui/pill";
 import { useState } from "react";
 import { DateRangePicker } from "./DateRangePicker";
-import type { ConversationAnalysis, VisitorAnalysisRow } from "@/app/types/types";
+import type {
+  ConversationAnalysis,
+  VisitorAnalysisRow,
+  VisitorDurationRow,
+} from "@/app/types/types";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -74,8 +78,10 @@ interface VisitorsProps {
   // visitors: VisitorLite[];
 
   // setSelectedSessionId: (id: string) => void;
-  setVisitorPage: (updater: (prev: number) => number) => void;
-  onLoadMoreVisitors: () => void;
+  onPageChange: (page: number) => void;
+  currentPage: number;
+  totalPages: number;
+  totalVisitors?: number | null;
 
   deleting: boolean;
   deleteVisitor: (id: string) => void;
@@ -84,13 +90,12 @@ interface VisitorsProps {
   filterOption: FilterOption;
   setFilterOption: (v: FilterOption) => void;
   loadingBookTourRows?: boolean;
-  hasMoreVisitors: boolean;
-
   // ✅ NEW: stats for chat_bot_book_a_tour per visitor
   bookTourStatsByVisitor: Map<string, BookATourStats>;
   reviewRequestsByVisitor: Map<string, ReviewRequestLite>;
   onRequestReview: (visitorId: string, comment: string) => Promise<void>;
   analysisByVisitor: Map<string, VisitorAnalysisRow>;
+  durationByVisitor: Map<string, VisitorDurationRow>;
   analysisLoadingVisitorId: string | null;
   onAnalyzeVisitor: (visitorId: string) => Promise<ConversationAnalysis>;
   isAdmin: boolean;
@@ -102,7 +107,6 @@ interface VisitorsProps {
 }
 
 export const VisitorsSessions = ({
-  hasMoreVisitors,
   loadingVisitors,
   selectedVisitorId,
   setSelectedVisitorId,
@@ -114,8 +118,10 @@ export const VisitorsSessions = ({
   // setSelectedSessionId,
   // visitors,
   isAdmin,
-  setVisitorPage,
-  onLoadMoreVisitors,
+  onPageChange,
+  currentPage,
+  totalPages,
+  totalVisitors,
   deleting,
   filterOption,
   setFilterOption,
@@ -124,6 +130,7 @@ export const VisitorsSessions = ({
   reviewRequestsByVisitor,
   onRequestReview,
   analysisByVisitor,
+  durationByVisitor,
   analysisLoadingVisitorId,
   onAnalyzeVisitor,
   startDate,
@@ -153,6 +160,41 @@ export const VisitorsSessions = ({
     ai_neutral: "AI neutral",
     ai_angry: "AI angry",
   };
+  const formatDuration = (seconds?: number | null) => {
+    if (!Number.isFinite(seconds) || !seconds || seconds <= 0) return "0s";
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    const totalMinutes = Math.round((seconds as number) / 60);
+    if (totalMinutes < 60) return `${totalMinutes}m`;
+    const totalHours = Math.floor(totalMinutes / 60);
+    const remMinutes = totalMinutes % 60;
+    if (totalHours < 24) {
+      return remMinutes ? `${totalHours}h ${remMinutes}m` : `${totalHours}h`;
+    }
+    const totalDays = Math.floor(totalHours / 24);
+    const remHours = totalHours % 24;
+    return remHours ? `${totalDays}d ${remHours}h` : `${totalDays}d`;
+  };
+
+  const safeTotalPages = Math.max(1, totalPages || 1);
+  const currentPageSafe = Math.min(
+    Math.max(currentPage, 0),
+    safeTotalPages - 1
+  );
+  const displayPage = currentPageSafe + 1;
+  const paginationItems = (() => {
+    const total = safeTotalPages;
+    const current = displayPage;
+    if (total <= 6) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    if (current <= 3) {
+      return [1, 2, 3, 4, "ellipsis", total] as const;
+    }
+    if (current >= total - 2) {
+      return [1, "ellipsis", total - 3, total - 2, total - 1, total] as const;
+    }
+    return [1, "ellipsis", current - 1, current, current + 1, "ellipsis", total] as const;
+  })();
 
   const promptByVersion: Record<string, string> = {
     v1: `
@@ -327,7 +369,7 @@ Output rules:
                   setStartDate(from);
                   setEndDate(to);
                   // optional: reset page when date changes
-                  setVisitorPage(() => 0);
+                  onPageChange(0);
                 }}
               />
 
@@ -345,7 +387,7 @@ Output rules:
                 type="button"
                 onClick={() => {
                   setFilterOption("all");
-                  setVisitorPage(() => 0);
+                  onPageChange(0);
                   setSelectedVisitorId("");
                 }}
                 className={[
@@ -362,7 +404,7 @@ Output rules:
                 type="button"
                 onClick={() => {
                   setFilterOption("submitted");
-                  setVisitorPage(() => 0);
+                  onPageChange(0);
                   setSelectedVisitorId("");
                 }}
                 disabled={!!loadingBookTourRows}
@@ -381,7 +423,7 @@ Output rules:
                 type="button"
                 onClick={() => {
                   setFilterOption("not_submitted");
-                  setVisitorPage(() => 0);
+                  onPageChange(0);
                   setSelectedVisitorId("");
                 }}
                 disabled={!!loadingBookTourRows}
@@ -399,7 +441,7 @@ Output rules:
                 type="button"
                 onClick={() => {
                   setFilterOption("requested");
-                  setVisitorPage(() => 0);
+                  onPageChange(0);
                   setSelectedVisitorId("");
                 }}
                 className={[
@@ -416,7 +458,7 @@ Output rules:
                 type="button"
                 onClick={() => {
                   setFilterOption("reviewed");
-                  setVisitorPage(() => 0);
+                  onPageChange(0);
                   setSelectedVisitorId("");
                 }}
                 className={[
@@ -432,7 +474,7 @@ Output rules:
                 type="button"
                 onClick={() => {
                   setFilterOption("ai_satisfied");
-                  setVisitorPage(() => 0);
+                  onPageChange(0);
                   setSelectedVisitorId("");
                 }}
                 className={[
@@ -448,7 +490,7 @@ Output rules:
                 type="button"
                 onClick={() => {
                   setFilterOption("ai_neutral");
-                  setVisitorPage(() => 0);
+                  onPageChange(0);
                   setSelectedVisitorId("");
                 }}
                 className={[
@@ -464,7 +506,7 @@ Output rules:
                 type="button"
                 onClick={() => {
                   setFilterOption("ai_angry");
-                  setVisitorPage(() => 0);
+                  onPageChange(0);
                   setSelectedVisitorId("");
                 }}
                 className={[
@@ -558,6 +600,7 @@ Output rules:
             const isPending = review?.status === "pending";
             const isReviewed = review?.status === "reviewed";
             const analysis = analysisByVisitor.get(v.id);
+            const duration = durationByVisitor.get(v.id);
 
             return (
               <Card
@@ -616,6 +659,12 @@ Output rules:
                             : "muted"
                       )
                     : null}
+                  {pill(
+                    `duration: ${
+                      duration ? formatDuration(duration.duration_seconds) : "n/a"
+                    }`,
+                    duration ? "muted" : "muted"
+                  )}
                 </div>
 
                 <div className="mt-3 flex items-center gap-2">
@@ -794,19 +843,34 @@ Output rules:
       </div>
       <CardFooter className="p-4 border-t border-border flex flex-col ">
         <div className="pt-2">
-          {hasMoreVisitors && (
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={onLoadMoreVisitors}
-              disabled={loadingVisitors}
-            >
-              Load more
-            </Button>
-          )}
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {paginationItems.map((item, idx) =>
+              item === "ellipsis" ? (
+                <span
+                  key={`ellipsis-${idx}`}
+                  className="px-2 text-xs text-muted-foreground"
+                >
+                  …
+                </span>
+              ) : (
+                <Button
+                  key={`page-${item}`}
+                  variant={item === displayPage ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={() => onPageChange(item - 1)}
+                  disabled={loadingVisitors || item === displayPage}
+                >
+                  {item}
+                </Button>
+              )
+            )}
+          </div>
         </div>
         <div className="text-xs text-muted-foreground mt-2 text-center">
-          Showing {filteredVisitors.length} visitors
+          Page {displayPage} of {safeTotalPages}
+          {typeof totalVisitors === "number"
+            ? ` • ${totalVisitors} total`
+            : ""}
         </div>
       </CardFooter>
     </Card>

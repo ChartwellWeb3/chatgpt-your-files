@@ -39,6 +39,32 @@ type AiSummary = {
   total: number;
 };
 
+type DurationSummary = {
+  avgSeconds: number;
+  total: number;
+};
+
+type DurationBySentimentSummary = {
+  satisfiedAvgSeconds: number;
+  neutralAvgSeconds: number;
+  angryAvgSeconds: number;
+  satisfiedTotal: number;
+  neutralTotal: number;
+  angryTotal: number;
+};
+
+type DurationBucket = {
+  count: number;
+  avgSeconds: number;
+};
+
+type DurationBucketSummary = {
+  overall: Record<string, DurationBucket>;
+  satisfied: Record<string, DurationBucket>;
+  neutral: Record<string, DurationBucket>;
+  angry: Record<string, DurationBucket>;
+};
+
 type CommonWordRow = {
   word: string;
   freq: number;
@@ -125,6 +151,63 @@ export default function ChatAnalyticsOverviewPage() {
         avgScore: summary.avgScore ?? 0,
         total: summary.total ?? 0,
       };
+    },
+  });
+
+  const durationSummaryQuery = useQuery({
+    queryKey: ["analytics-duration-summary", startDate, endDate],
+    queryFn: async (): Promise<DurationSummary> => {
+      const { data, error } = await supabase.rpc("analytics_duration_summary", {
+        p_start: startDate ? startDate : null,
+        p_end: endDate ? endDate : null,
+      });
+
+      if (error) throw error;
+      const summary = (data ?? {}) as DurationSummary;
+      return {
+        avgSeconds: summary.avgSeconds ?? 0,
+        total: summary.total ?? 0,
+      };
+    },
+  });
+
+  const durationBySentimentQuery = useQuery({
+    queryKey: ["analytics-duration-by-sentiment", startDate, endDate],
+    queryFn: async (): Promise<DurationBySentimentSummary> => {
+      const { data, error } = await supabase.rpc(
+        "analytics_duration_by_sentiment",
+        {
+          p_start: startDate ? startDate : null,
+          p_end: endDate ? endDate : null,
+        }
+      );
+
+      if (error) throw error;
+      const summary = (data ?? {}) as DurationBySentimentSummary;
+      return {
+        satisfiedAvgSeconds: summary.satisfiedAvgSeconds ?? 0,
+        neutralAvgSeconds: summary.neutralAvgSeconds ?? 0,
+        angryAvgSeconds: summary.angryAvgSeconds ?? 0,
+        satisfiedTotal: summary.satisfiedTotal ?? 0,
+        neutralTotal: summary.neutralTotal ?? 0,
+        angryTotal: summary.angryTotal ?? 0,
+      };
+    },
+  });
+
+  const durationBucketQuery = useQuery({
+    queryKey: ["analytics-duration-buckets", startDate, endDate],
+    queryFn: async (): Promise<DurationBucketSummary> => {
+      const { data, error } = await supabase.rpc(
+        "analytics_duration_bucket_summary",
+        {
+          p_start: startDate ? startDate : null,
+          p_end: endDate ? endDate : null,
+        }
+      );
+
+      if (error) throw error;
+      return (data ?? {}) as DurationBucketSummary;
     },
   });
 
@@ -227,6 +310,9 @@ export default function ChatAnalyticsOverviewPage() {
       commonWordsQuery.refetch(),
       stopwordsQuery.refetch(),
       aiSummaryQuery.refetch(),
+      durationSummaryQuery.refetch(),
+      durationBySentimentQuery.refetch(),
+      durationBucketQuery.refetch(),
       // bookedToursByDateQuery.refetch(),
     ]);
   };
@@ -356,6 +442,9 @@ export default function ChatAnalyticsOverviewPage() {
         topResidences={overviewSummary.topResidences}
         topLangs={overviewSummary.topLangs}
         aiSummary={aiSummaryQuery.data ?? null}
+        durationSummary={durationSummaryQuery.data ?? null}
+        durationBySentiment={durationBySentimentQuery.data ?? null}
+        durationBuckets={durationBucketQuery.data ?? null}
       />
 
       <MonthlyInsightsSection isAdmin={isAdmin} />
