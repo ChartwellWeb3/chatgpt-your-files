@@ -19,6 +19,8 @@ type InfoDialogProps = {
   summary?: string;
   children: ReactNode;
   triggerLabel?: string;
+  buttonClassName?: string;
+  iconClassName?: string;
 };
 
 export function InfoDialog({
@@ -26,6 +28,8 @@ export function InfoDialog({
   summary,
   children,
   triggerLabel,
+  buttonClassName,
+  iconClassName,
 }: InfoDialogProps) {
   return (
     <AlertDialog>
@@ -34,11 +38,11 @@ export function InfoDialog({
           type="button"
           variant="ghost"
           size="icon"
-          className="h-8 w-8 text-muted-foreground"
+          className={`h-8 w-8 text-muted-foreground ${buttonClassName ?? ""}`}
           aria-label={triggerLabel ?? `${title} info`}
           title={triggerLabel ?? `${title} info`}
         >
-          <HelpCircle className="h-4 w-4" />
+          <HelpCircle className={`h-4 w-4 ${iconClassName ?? ""}`} />
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent className="max-w-2xl">
