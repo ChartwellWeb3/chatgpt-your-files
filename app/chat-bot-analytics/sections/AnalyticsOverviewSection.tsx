@@ -157,7 +157,7 @@ export function AnalyticsOverviewSection({
     color: string;
   };
   const buildBucketData = (
-    buckets: Record<string, { count: number; avgSeconds: number }>
+    buckets: Record<string, { count: number; avgSeconds: number }>,
   ) => {
     return bucketLabels
       .map((bucket, idx) => ({
@@ -169,9 +169,7 @@ export function AnalyticsOverviewSection({
       }))
       .filter((item) => item.value > 0);
   };
-  const renderBucketTooltip = (
-    props: TooltipProps<number, string>
-  ) => {
+  const renderBucketTooltip = (props: TooltipProps<number, string>) => {
     const { active, payload } = props;
     if (!active || !payload?.length) return null;
     const item = payload[0]?.payload as BucketSlice | undefined;
@@ -255,7 +253,7 @@ export function AnalyticsOverviewSection({
             </div>
           )}
         </div>
-      
+
         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[10px]">
           {bucketLabels.map((bucket, idx) => (
             <div
@@ -328,7 +326,9 @@ Output rules:
 
   const openPromptModal = (version: string) => {
     setPromptVersion(version);
-    setPromptText(promptByVersion[version] ?? "Prompt not found for this version.");
+    setPromptText(
+      promptByVersion[version] ?? "Prompt not found for this version.",
+    );
     setPromptOpen(true);
   };
   return (
@@ -365,23 +365,29 @@ Output rules:
             summary="High-level usage and conversion metrics for the selected date range."
           >
             <p>
-              <span className="font-medium text-foreground">What it shows:</span>{" "}
-              Visitor counts, interactions, average interactions per visitor,
-              form submissions, corporate vs residence split, multi-message
+              <span className="font-medium text-foreground">
+                What it shows:
+              </span>{" "}
+              User counts, interactions, average interactions per user, form
+              submissions, corporate vs residence split, multi-message
               engagement, and average conversation duration.
             </p>
             <p>
-              <span className="font-medium text-foreground">How it is collected:</span>{" "}
-              Aggregated from <span className="font-medium">visitors</span>,{" "}
+              <span className="font-medium text-foreground">
+                How it is collected:
+              </span>{" "}
+              Aggregated from <span className="font-medium">users</span>,{" "}
               <span className="font-medium">chat_sessions</span>,{" "}
               <span className="font-medium">chat_messages</span>, and{" "}
-              <span className="font-medium">visitor_forms</span>, plus
-              <span className="font-medium"> chat_visitor_durations</span> for
+              <span className="font-medium">user_forms</span>, plus
+              <span className="font-medium"> chat_user_durations</span> for
               duration metrics. Corporate vs residence uses the session
               residence identifier.
             </p>
             <p>
-              <span className="font-medium text-foreground">Update frequency:</span>{" "}
+              <span className="font-medium text-foreground">
+                Update frequency:
+              </span>{" "}
               Calculated on demand when you load, refresh, or change the date
               range.
             </p>
@@ -400,20 +406,72 @@ Output rules:
       </div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card className="p-4">
-          <div className="text-xs text-muted-foreground">Visitors</div>
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span>Users</span>
+            <InfoDialog
+              title="Users"
+              summary="Unique users who started at least one chat session in the selected range."
+              triggerLabel="Users info"
+              buttonClassName="h-5 w-5"
+              iconClassName="h-3.5 w-3.5"
+            >
+              <p>
+                <span className="font-medium text-foreground">
+                  What it shows:
+                </span>{" "}
+                Number of unique users who submitted at least one question to
+                the chatbot during the selected date range. Each user is counted
+                only once, even if they asked multiple questions.
+              </p>
+            </InfoDialog>
+          </div>
           <div className="text-2xl font-semibold">
             {overviewCounts.visitors}
           </div>
         </Card>
         <Card className="p-4">
-          <div className="text-xs text-muted-foreground">Interactions</div>
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span>Sessions</span>
+            <InfoDialog
+              title="Sessions"
+              summary="Total chat sessions in the selected range."
+              triggerLabel="Sessions info"
+              buttonClassName="h-5 w-5"
+              iconClassName="h-3.5 w-3.5"
+            >
+              <p>
+                <span className="font-medium text-foreground">
+                  What it shows:
+                </span>{" "}
+                Total number of chatbot sessions created within the selected
+                date range. A session is counted when a user asks at least one
+                question on the page. The same user may create multiple sessions
+                by asking questions on different pages or returning later.
+              </p>
+            </InfoDialog>
+          </div>
           <div className="text-2xl font-semibold">
             {overviewCounts.sessions}
           </div>
         </Card>
         <Card className="p-4">
-          <div className="text-xs text-muted-foreground">
-            Avg interactions per visitor
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span>Avg sessions per user</span>
+            <InfoDialog
+              title="Avg sessions per user"
+              summary="Average number of sessions per unique user in the selected range."
+              triggerLabel="Avg sessions per user info"
+              buttonClassName="h-5 w-5"
+              iconClassName="h-3.5 w-3.5"
+            >
+              <p>
+                <span className="font-medium text-foreground">
+                  What it shows:
+                </span>{" "}
+                Sessions divided by unique users. Higher values indicate more
+                repeat sessions per user.
+              </p>
+            </InfoDialog>
           </div>
           <div className="text-2xl font-semibold">
             {(overviewCounts.visitors
@@ -423,7 +481,24 @@ Output rules:
           </div>
         </Card>
         <Card className="p-4">
-          <div className="text-xs text-muted-foreground">Forms submitted</div>
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span>Forms submitted</span>
+            <InfoDialog
+              title="Forms submitted"
+              summary="Count of completed form submissions in the selected range."
+              triggerLabel="Forms submitted info"
+              buttonClassName="h-5 w-5"
+              iconClassName="h-3.5 w-3.5"
+            >
+              <p>
+                <span className="font-medium text-foreground">
+                  What it shows:
+                </span>{" "}
+                Number of forms that were submitted successfully during the
+                selected date range.
+              </p>
+            </InfoDialog>
+          </div>
           <div className="text-2xl font-semibold">
             {overviewCounts.submittedForms}
           </div>
@@ -432,19 +507,49 @@ Output rules:
           </div>
         </Card>
         <Card className="p-4">
-          <div className="text-xs text-muted-foreground">
-            Form submission rate
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span>Form submission rate</span>
+            <InfoDialog
+              title="Form submission rate"
+              summary="Percent of unique users who submitted a form in the selected range."
+              triggerLabel="Form submission rate info"
+              buttonClassName="h-5 w-5"
+              iconClassName="h-3.5 w-3.5"
+            >
+              <p>
+                <span className="font-medium text-foreground">
+                  What it shows:
+                </span>{" "}
+                Submitted forms as a percentage of unique users in the selected
+                range.
+              </p>
+            </InfoDialog>
           </div>
           <div className="text-2xl font-semibold">
             {formCompletionPct.toFixed(0)}%
           </div>
           <div className="text-xs text-muted-foreground mt-1">
-            submitted vs visitors
+            submitted vs users
           </div>
         </Card>
         <Card className="p-4">
-          <div className="text-xs text-muted-foreground">
-            Corporate vs residence sessions
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span>Corporate vs residence sessions</span>
+            <InfoDialog
+              title="Corporate vs residence sessions"
+              summary="Session count split by corporate vs residence context."
+              triggerLabel="Corporate vs residence sessions info"
+              buttonClassName="h-5 w-5"
+              iconClassName="h-3.5 w-3.5"
+            >
+              <p>
+                <span className="font-medium text-foreground">
+                  What it shows:
+                </span>{" "}
+                Total sessions separated into corporate and residence contexts.
+                The percentage highlights the corporate share.
+              </p>
+            </InfoDialog>
           </div>
           <div className="text-2xl font-semibold">
             {corporateSessions} / {residenceSessions}
@@ -454,23 +559,56 @@ Output rules:
           </div>
         </Card>
         <Card className="p-4">
-          <div className="text-xs text-muted-foreground">
-            Visitors with 2+ messages
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span>Users with 2+ messages</span>
+            <InfoDialog
+              title="User with 2+ messages"
+              summary="Unique users who sent at least two messages in the selected range."
+              triggerLabel="Users with 2+ messages info"
+              buttonClassName="h-5 w-5"
+              iconClassName="h-3.5 w-3.5"
+            >
+              <p>
+                <span className="font-medium text-foreground">
+                  What it shows:
+                </span>{" "}
+                Count of unique users who sent two or more messages during the
+                selected date range. Messages may be sent within a single
+                session or across multiple sessions. Each user is counted only
+                once.
+              </p>
+            </InfoDialog>
           </div>
           <div className="text-2xl font-semibold">{multiMessageVisitors}</div>
           <div className="text-xs text-muted-foreground mt-1">
-            {multiMessageVisitorPct.toFixed(0)}% of visitors
+            {multiMessageVisitorPct.toFixed(0)}% of users
           </div>
         </Card>
         <Card className="p-4">
-          <div className="text-xs text-muted-foreground">
-            Visitors with messages in 2+ interactions
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span>Users with messages in 2+ sessions</span>
+            <InfoDialog
+              title="Users with messages in 2+ sessions"
+              summary="Unique users who sent messages across two or more sessions."
+              triggerLabel="Users with messages in 2+ sessions info"
+              buttonClassName="h-5 w-5"
+              iconClassName="h-3.5 w-3.5"
+            >
+              <p>
+                <span className="font-medium text-foreground">
+                  What it shows:
+                </span>{" "}
+                Count of unique users who asked at least one question in two or
+                more chatbot sessions during the selected date range. Each
+                session must include at least one user message.
+              </p>
+            </InfoDialog>
           </div>
           <div className="text-2xl font-semibold">
             {multiSessionMessageVisitors}
           </div>
           <div className="text-xs text-muted-foreground mt-1">
-            {multiSessionMessageVisitorPct.toFixed(0)}% of visitors
+            {multiSessionMessageVisitorPct.toFixed(0)}% of users
           </div>
         </Card>
       </div>
@@ -483,20 +621,24 @@ Output rules:
             summary="Average duration and bucket breakdown for conversations."
           >
             <p>
-              <span className="font-medium text-foreground">What it shows:</span>{" "}
-              Average duration per visitor (latest conversation) plus a bucketed
+              <span className="font-medium text-foreground">
+                What it shows:
+              </span>{" "}
+              Average duration per user (latest conversation) plus a bucketed
               distribution of counts and averages by time ranges.
             </p>
             <p>
-              <span className="font-medium text-foreground">How it is collected:</span>{" "}
+              <span className="font-medium text-foreground">
+                How it is collected:
+              </span>{" "}
               Duration is calculated as first message → last message for the
-              latest conversation snapshot per visitor, based on stored
-              duration runs.
+              latest conversation snapshot per user, based on stored duration
+              runs.
             </p>
             <p>
-              <span className="font-medium text-foreground">Tips:</span>{" "}
-              Use the hover on pie slices to see bucket counts and average
-              duration within each range.
+              <span className="font-medium text-foreground">Tips:</span> Use the
+              hover on pie slices to see bucket counts and average duration
+              within each range.
             </p>
           </InfoDialog>
         </div>
@@ -512,7 +654,7 @@ Output rules:
               from {duration.total} conversations
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              Latest per visitor; duration = first → last message.
+              Latest per user; duration = first → last message.
             </div>
             {renderBuckets("overall")}
           </Card>
@@ -527,7 +669,7 @@ Output rules:
               from {durationSentiment.satisfiedTotal} conversations
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              Latest analyzed per visitor; duration = first → last message.
+              Latest analyzed per user; duration = first → last message.
             </div>
             {renderBuckets("satisfied")}
           </Card>
@@ -542,7 +684,7 @@ Output rules:
               from {durationSentiment.neutralTotal} conversations
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              Latest analyzed per visitor; duration = first → last message.
+              Latest analyzed per user; duration = first → last message.
             </div>
             {renderBuckets("neutral")}
           </Card>
@@ -557,7 +699,7 @@ Output rules:
               from {durationSentiment.angryTotal} conversations
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              Latest analyzed per visitor; duration = first → last message.
+              Latest analyzed per user; duration = first → last message.
             </div>
             {renderBuckets("angry")}
           </Card>
@@ -576,25 +718,32 @@ Output rules:
                 summary="Sentiment and satisfaction scores based on automated conversation analysis."
               >
                 <p>
-                  <span className="font-medium text-foreground">What it shows:</span>{" "}
-                  Counts of satisfied, neutral, and angry visitors plus the
-                  average satisfaction score, using the latest analysis per
-                  visitor.
+                  <span className="font-medium text-foreground">
+                    What it shows:
+                  </span>{" "}
+                  Counts of satisfied, neutral, and angry users plus the average
+                  satisfaction score, using the latest analysis per user.
                 </p>
                 <p>
-                  <span className="font-medium text-foreground">How it is collected:</span>{" "}
+                  <span className="font-medium text-foreground">
+                    How it is collected:
+                  </span>{" "}
                   A scheduled job sends full chat transcripts to the analyzer
-                  and stores results in <span className="font-medium">chat_visitor_analyses</span>.
+                  and stores results in{" "}
+                  <span className="font-medium">chat_user_analyses</span>.
                 </p>
                 <p>
-                  <span className="font-medium text-foreground">Update frequency:</span>{" "}
-                  Runs daily at 02:00 (database time) and processes up to 150
-                  visitors per run.
+                  <span className="font-medium text-foreground">
+                    Update frequency:
+                  </span>{" "}
+                  Runs 3x daily at 04:00, 10:00, and 13:00 (database time) and
+                  processes up to 150 users per run.
                 </p>
               </InfoDialog>
             </div>
             <div className="text-sm text-muted-foreground">
-              Sentiment counts and average satisfaction from the latest analysis per visitor.
+              Sentiment counts and average satisfaction from the latest analysis
+              per user.
             </div>
           </div>
           <Button
@@ -642,7 +791,7 @@ Output rules:
               {ai.avgScore.toFixed(2)}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              based on latest per visitor
+              based on latest per user
             </div>
           </Card>
         </div>
@@ -656,21 +805,27 @@ Output rules:
             summary="Most common pages, residences, and languages in chat sessions."
           >
             <p>
-              <span className="font-medium text-foreground">What it shows:</span>{" "}
+              <span className="font-medium text-foreground">
+                What it shows:
+              </span>{" "}
               Top 5 pages and residences by session count, plus languages by
-              unique visitors for the selected range.
+              unique users for the selected range.
             </p>
             <p>
-              <span className="font-medium text-foreground">How it is collected:</span>{" "}
+              <span className="font-medium text-foreground">
+                How it is collected:
+              </span>{" "}
               Pages and residences are aggregated from{" "}
               <span className="font-medium">chat_sessions</span> (page URL and
               residence id) with residence names resolved from{" "}
               <span className="font-medium">residences</span>. Languages are
-              counted once per visitor using the latest session language in the
+              counted once per users using the latest session language in the
               selected range.
             </p>
             <p>
-              <span className="font-medium text-foreground">Update frequency:</span>{" "}
+              <span className="font-medium text-foreground">
+                Update frequency:
+              </span>{" "}
               Calculated on demand when you refresh or change the date range.
             </p>
           </InfoDialog>
