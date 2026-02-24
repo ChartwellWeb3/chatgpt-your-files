@@ -38,9 +38,11 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import Link from "next/link";
 
 type Residence = {
   id: number;
@@ -1014,6 +1016,16 @@ export default function DashboardPage() {
                   language={sitecoreLanguage}
                 />
               </CardContent>
+              <CardFooter className="text-center flex items-center justify-center">
+                <Button className=" ">
+                  <Link
+                    target="_blank"
+                    href="https://dev.azure.com/chartwell/XM/_wiki/wikis/XM.wiki/338/Chatbot-Residence-Content-Manager"
+                  >
+                    Documentation
+                  </Link>
+                </Button>
+              </CardFooter>
             </Card>
           </div>
         )}

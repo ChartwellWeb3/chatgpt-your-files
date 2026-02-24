@@ -85,6 +85,26 @@ Helpful view:
 - `supabase/functions/embed`: generates embeddings for rows missing embeddings.
 - `supabase/functions/search-vector`: generates an embedding for a query and calls `match_document_sections_public`.
 
+## Sitecore integration
+- The Residence Manager pulls residence data from Sitecore via `/api/sitecore/residence-selector`.
+- The API route connects to the Sitecore Delivery GraphQL endpoint using `SITECORE_GRAPHQL_ENDPOINT` and `SITECORE_RESIDENCE_DATASOURCE`.
+- If your Sitecore environment requires auth, set `SITECORE_EDGE_CONTEXT_ID` (sent as `sc_apikey`) and/or `SITECORE_GQL_TOKEN` (sent as `X-GQL-TOKEN`).
+- Configure these values in `.env.local` (see `.env.local.example`).
+
+## Updating residences from Sitecore
+- Open `/chatbot-content-management` with no residence selected to see the Sitecore panel.
+- Choose a language (EN/FR), then click `Load Sitecore` to pull the latest data.
+- For each province, click `Download .md`.
+- In the residence list, select `corporateen` or `corporatefr` (matching the selected language).
+- Remove the old file and upload the new file with the same name.
+- Uploading triggers the re-indexing pipeline (parse metadata, generate embeddings, refresh search).
+
+## Updating a residence record
+- Select a residence in the left panel and click the pencil icon to edit.
+- Update the display name and `custom_id`.
+- `custom_id` must be lowercase letters, numbers, and hyphens and is used as the storage/search scope.
+- Keep `custom_id` aligned with downstream conventions (for example `11034en` / `11034fr` if your property IDs are language-specific).
+
 ## Local setup
 1. Copy `.env.local.example` to `.env.local` and fill in Supabase values.
 2. Install dependencies and run the dev server.
