@@ -2,13 +2,14 @@
 import { Toaster } from "@/components/ui/toaster";
 import Providers from "@/lib/providers";
 import NavLink from "@/components/NavLink/NavLink"; // Ensure path is correct
+import ChatbotMenu from "@/components/NavLink/ChatbotMenu";
 import { LogoutButton } from "@/components/LogoutButton/LogoutButton";
-import { Links } from "@/app/Links/Links";
+import { ChatbotLinks, Links } from "@/app/Links/Links";
 import Link from "next/link";
 import type { PropsWithChildren, ReactNode } from "react";
 import "three-dots/dist/three-dots.css";
 import "./globals.css";
-import { BarChart3, Database, Files, Users } from "lucide-react";
+import { BarChart3, Bot, Database, Files, Users, FlaskConical } from "lucide-react";
 
 // 1. Import the new server client creator
 import { createClient } from "./utils/supabase/server";
@@ -29,9 +30,14 @@ export default async function RootLayout({ children }: PropsWithChildren) {
   const navIcons: Record<string, ReactNode> = {
     "/chatbot-content-management": <Files className="h-4 w-4" />,
     "/chat-bot-analytics": <BarChart3 className="h-4 w-4" />,
+    "/chatbot-prompt-testing": <FlaskConical className="h-4 w-4" />,
     "/user-data-tracker": <Database className="h-4 w-4" />,
     "/team": <Users className="h-4 w-4" />,
   };
+  const chatbotMenuLinks = ChatbotLinks.map((link) => ({
+    ...link,
+    icon: navIcons[link.href],
+  }));
 
   const {
     data: { user },
@@ -68,18 +74,26 @@ export default async function RootLayout({ children }: PropsWithChildren) {
                       Chartwell Manager
                     </span>
                   </Link>
-                  {user &&
-                    Links.map((link) => {
-                      return (
-                        <NavLink
-                          key={link.href}
-                          href={link.href}
-                          icon={navIcons[link.href]}
-                        >
-                          {link.label}
-                        </NavLink>
-                      );
-                    })}
+                  {user ? (
+                    <>
+                      <ChatbotMenu
+                        label="Chatbot"
+                        icon={<Bot className="h-4 w-4" />}
+                        links={chatbotMenuLinks}
+                      />
+                      {Links.map((link) => {
+                        return (
+                          <NavLink
+                            key={link.href}
+                            href={link.href}
+                            icon={navIcons[link.href]}
+                          >
+                            {link.label}
+                          </NavLink>
+                        );
+                      })}
+                    </>
+                  ) : null}
                 </div>
                 <div className="flex items-center gap-4">
                   {user ? (
