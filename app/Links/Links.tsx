@@ -10,16 +10,22 @@
 //   USER_DATA_TRACKER: { href: "/user-data-tracker", label: "User Data Tracker" },
 // };
 
-export const Links = [
+export const ChatbotLinks = [
   {
     href: "/chatbot-content-management",
     label: "Chat Bot Content Management",
   },
-
   {
     href: "/chat-bot-analytics",
     label: "Chat Bot Analytics",
   },
+  {
+    href: "/chatbot-prompt-testing",
+    label: "Prompt Testing",
+  },
+];
+
+export const Links = [
   {
     href: "/user-data-tracker",
     label: "User Data Tracker",
@@ -27,5 +33,5 @@ export const Links = [
   {
     href: "/team",
     label: "Team Management",
-  }
+  },
 ];

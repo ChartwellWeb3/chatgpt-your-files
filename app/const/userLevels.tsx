@@ -9,6 +9,7 @@ const PREFIXES: Record<string, AllowedPrefix> = {
     path: "/chatbot-content-management",
   },
   analytics: { name: "Chat Bot Analytics", path: "/chat-bot-analytics" },
+  promptTesting: { name: "Prompt Testing", path: "/chatbot-prompt-testing" },
   tracker: { name: "User Data Tracker", path: "/user-data-tracker" },
   api: { name: "API", path: "/api" },
   team: { name: "Team Management", path: "/team" },
@@ -16,8 +17,8 @@ const PREFIXES: Record<string, AllowedPrefix> = {
 
 const LEVEL_ALLOWED_KEYS: Record<Level, (keyof typeof PREFIXES)[]> = {
   3: ["home", "analytics", "tracker", "team"],
-  2: ["home", "content", "analytics", "tracker", "team"],
-  1: ["home", "content", "analytics", "tracker", "api", "team"],
+  2: ["home", "content", "analytics", "promptTesting", "tracker", "team"],
+  1: ["home", "content", "analytics", "promptTesting", "tracker", "api", "team"],
 };
 
 export const LEVEL_ALLOWED_PREFIXES: Record<Level, AllowedPrefix[]> = {

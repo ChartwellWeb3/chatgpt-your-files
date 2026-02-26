@@ -11,7 +11,8 @@ interface IProps {
 
 export default function NavLink({ href, children, icon }: IProps) {
   const currentPath = usePathname();
-  const isActive = currentPath === href; // Simple check for exact match
+  const isActive =
+    currentPath === href || currentPath.startsWith(`${href}/`);
 
   // Define your styles conditionally
   const linkClasses = isActive
