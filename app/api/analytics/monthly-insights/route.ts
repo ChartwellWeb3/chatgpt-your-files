@@ -557,7 +557,7 @@ export async function POST(req: Request) {
           prompt: topPrompt,
           schema: TOP_SCHEMA,
           name: "monthly_chat_insights_top",
-          maxOutputTokens: 700,
+          maxOutputTokens: 3000,
         });
 
         topParsed = topResult.parsed;
@@ -578,7 +578,7 @@ export async function POST(req: Request) {
           prompt: unansweredPrompt,
           schema: UNANSWERED_SCHEMA,
           name: "monthly_chat_unanswered_questions",
-          maxOutputTokens: 900,
+          maxOutputTokens: 3000,
         });
 
         unansweredParsed = unansweredResult.parsed;
