@@ -380,7 +380,7 @@ Output rules:
               <span className="font-medium">chat_sessions</span>,{" "}
               <span className="font-medium">chat_messages</span>, and{" "}
               <span className="font-medium">user_forms</span>, plus
-              <span className="font-medium"> chat_user_durations</span> for
+              <span className="font-medium"> chat_session_durations</span> for
               duration metrics. Corporate vs residence uses the session
               residence identifier.
             </p>
@@ -618,22 +618,21 @@ Output rules:
           <h3 className="text-sm font-semibold">Conversation duration</h3>
           <InfoDialog
             title="Conversation duration"
-            summary="Average duration and bucket breakdown for conversations."
+            summary="Average duration and bucket breakdown for sessions."
           >
             <p>
               <span className="font-medium text-foreground">
                 What it shows:
               </span>{" "}
-              Average duration per user (latest conversation) plus a bucketed
-              distribution of counts and averages by time ranges.
+              Average duration per session plus a bucketed distribution of
+              counts and averages by time ranges.
             </p>
             <p>
               <span className="font-medium text-foreground">
                 How it is collected:
               </span>{" "}
-              Duration is calculated as first message → last message for the
-              latest conversation snapshot per user, based on stored duration
-              runs.
+              Duration is calculated as first message → last message within
+              each session, based on stored duration runs.
             </p>
             <p>
               <span className="font-medium text-foreground">Tips:</span> Use the
@@ -651,10 +650,10 @@ Output rules:
               {formatDuration(duration.avgSeconds)}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              from {duration.total} conversations
+              from {duration.total} sessions
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              Latest per user; duration = first → last message.
+              Per session; duration = first → last message.
             </div>
             {renderBuckets("overall")}
           </Card>
@@ -666,10 +665,10 @@ Output rules:
               {formatDuration(durationSentiment.satisfiedAvgSeconds)}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              from {durationSentiment.satisfiedTotal} conversations
+              from {durationSentiment.satisfiedTotal} sessions
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              Latest analyzed per user; duration = first → last message.
+              Per session; sentiment from latest analyzed user.
             </div>
             {renderBuckets("satisfied")}
           </Card>
@@ -681,10 +680,10 @@ Output rules:
               {formatDuration(durationSentiment.neutralAvgSeconds)}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              from {durationSentiment.neutralTotal} conversations
+              from {durationSentiment.neutralTotal} sessions
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              Latest analyzed per user; duration = first → last message.
+              Per session; sentiment from latest analyzed user.
             </div>
             {renderBuckets("neutral")}
           </Card>
@@ -696,10 +695,10 @@ Output rules:
               {formatDuration(durationSentiment.angryAvgSeconds)}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              from {durationSentiment.angryTotal} conversations
+              from {durationSentiment.angryTotal} sessions
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              Latest analyzed per user; duration = first → last message.
+              Per session; sentiment from latest analyzed user.
             </div>
             {renderBuckets("angry")}
           </Card>

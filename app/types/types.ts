@@ -71,3 +71,14 @@ export type VisitorDurationRow = {
   source: "auto" | "manual";
   created_at: string;
 };
+
+export type SessionDurationRow = {
+  id: number;
+  session_id: string;
+  visitor_id: string;
+  first_message_at: string;
+  last_message_at: string;
+  duration_seconds: number;
+  source: "auto" | "manual";
+  created_at: string;
+};

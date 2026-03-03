@@ -16,7 +16,7 @@ import type {
   SourceRow,
   VisitorRow,
   VisitorAnalysisRow,
-  VisitorDurationRow,
+  SessionDurationRow,
 } from "../../types/types";
 import { useSearchParams } from "next/navigation";
 
@@ -210,20 +210,20 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
   });
 
   const durationsQuery = useQuery({
-    queryKey: ["analytics-visitor-durations", analysisVisitorIds],
+    queryKey: ["analytics-session-durations", analysisVisitorIds],
     enabled: analysisVisitorIds.length > 0,
-    queryFn: async (): Promise<VisitorDurationRow[]> => {
+    queryFn: async (): Promise<SessionDurationRow[]> => {
       const { data, error } = await supabase
-        .from("chat_visitor_durations")
+        .from("chat_session_durations")
         .select(
-          "id,visitor_id,first_message_at,last_message_at,duration_seconds,source,created_at"
+          "id,session_id,visitor_id,first_message_at,last_message_at,duration_seconds,source,created_at"
         )
         .in("visitor_id", analysisVisitorIds)
         .eq("source", "auto")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return (data ?? []) as VisitorDurationRow[];
+      return (data ?? []) as SessionDurationRow[];
     },
   });
 
@@ -258,7 +258,7 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
   }, [analysesQuery.data, analysisOverrides]);
 
   const durationByVisitor = useMemo(() => {
-    const map = new Map<string, VisitorDurationRow>();
+    const map = new Map<string, SessionDurationRow>();
     (durationsQuery.data ?? []).forEach((row) => {
       if (!map.has(row.visitor_id)) {
         map.set(row.visitor_id, row);

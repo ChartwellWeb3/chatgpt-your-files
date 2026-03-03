@@ -11,7 +11,7 @@ import type {
   SourceRow,
   VisitorRow,
   VisitorAnalysisRow,
-  VisitorDurationRow,
+  SessionDurationRow,
   ConversationAnalysis,
 } from "@/app/types/types";
 
@@ -67,7 +67,7 @@ type ReplaySectionProps = {
   >;
   onRequestReview: (visitorId: string, comment: string) => Promise<void>;
   analysisByVisitor: Map<string, VisitorAnalysisRow>;
-  durationByVisitor: Map<string, VisitorDurationRow>;
+  durationByVisitor: Map<string, SessionDurationRow>;
   analysisLoadingVisitorId: string | null;
   analysisError: { visitorId: string; message: string } | null;
   onAnalyzeVisitor: (visitorId: string) => Promise<ConversationAnalysis>;
