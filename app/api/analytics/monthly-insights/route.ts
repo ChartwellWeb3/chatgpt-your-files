@@ -4,7 +4,7 @@ import { createClient as createServerClient } from "@/app/utils/supabase/server"
 
 export const runtime = "nodejs";
 
-const PROMPT_VERSION = "v1";
+const PROMPT_VERSION = "v3";
 const MODEL_FALLBACK = "gpt-5.2";
 const PAGE_TYPES = ["corporate", "residence"] as const;
 
@@ -14,6 +14,7 @@ type QuestionRow = {
   page_type: string;
   question: string | null;
   example: string | null;
+  answer_example: string | null;
   freq: number | null;
 };
 
@@ -39,16 +40,50 @@ function getResponseText(r: unknown) {
   return parts.join("\n").trim();
 }
 
+function getRefusalText(r: unknown) {
+  if (!isRecord(r) || !Array.isArray(r.output)) return "";
+  for (const item of r.output) {
+    if (isRecord(item) && item.type === "refusal") {
+      if (typeof item.refusal === "string" && item.refusal.trim()) {
+        return item.refusal.trim();
+      }
+    }
+    if (
+      isRecord(item) &&
+      item.type === "message" &&
+      Array.isArray(item.content)
+    ) {
+      for (const c of item.content) {
+        if (isRecord(c) && c.type === "refusal") {
+          if (typeof c.refusal === "string" && c.refusal.trim()) {
+            return c.refusal.trim();
+          }
+        }
+      }
+    }
+  }
+  return "";
+}
+
 function tryParseJson(raw: string) {
+  const attempt = (value: string) => JSON.parse(value);
+
   try {
-    return JSON.parse(raw);
+    return attempt(raw);
   } catch {
     const first = raw.indexOf("{");
     const last = raw.lastIndexOf("}");
-    if (first >= 0 && last > first) {
-      return JSON.parse(raw.slice(first, last + 1));
+    const slice =
+      first >= 0 && last > first ? raw.slice(first, last + 1) : raw;
+    try {
+      return attempt(slice);
+    } catch {
+      const repaired = slice
+        .replace(/,\s*]/g, "]")
+        .replace(/,\s*}/g, "}")
+        .replace(/}\s*{/g, "},{");
+      return attempt(repaired);
     }
-    throw new Error("Invalid JSON returned by model");
   }
 }
 
@@ -58,6 +93,52 @@ function formatDateUTC(date: Date) {
   const d = String(date.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
+
+function cleanLine(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+type QuestionInput = { text: string; freq: number; answer: string };
+type UnansweredQuestion = { question: string; answer: string };
+type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
+type RunMode = "top" | "unanswered" | "all";
+type RunPageType = "corporate" | "residence" | "all";
+
+type StructuredRunResult<T> = {
+  parsed: T;
+  responseId: string | null;
+  repairResponseId?: string | null;
+};
+
+const TOP_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    top_questions: { type: "array", items: { type: "string" } },
+    top_intents: { type: "array", items: { type: "string" } },
+  },
+  required: ["top_questions", "top_intents"],
+} as const;
+
+const UNANSWERED_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    unanswered_questions: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          question: { type: "string" },
+          answer: { type: "string" },
+        },
+        required: ["question", "answer"],
+      },
+    },
+  },
+  required: ["unanswered_questions"],
+} as const;
 
 function parseMonth(value: string) {
   if (!/^\d{4}-\d{2}$/.test(value)) return null;
@@ -72,15 +153,30 @@ function parseMonth(value: string) {
   };
 }
 
-function buildPrompt(params: {
+function buildQuestionLines(
+  questions: QuestionInput[],
+  includeAnswers: boolean
+) {
+  return questions
+    .slice(0, 120)
+    .map((q, idx) => {
+      const question = cleanLine(q.text);
+      if (!includeAnswers) {
+        return `${idx + 1}. (${q.freq}) ${question}`;
+      }
+      const answer = cleanLine(q.answer || "");
+      const answerLabel = answer ? answer : "[no reply]";
+      return `${idx + 1}. (${q.freq}) Q: ${question} | A: ${answerLabel}`;
+    })
+    .join("\n");
+}
+
+function buildTopPrompt(params: {
   monthLabel: string;
   pageType: PageType;
-  questions: Array<{ text: string; freq: number }>;
+  questions: QuestionInput[];
 }) {
-  const lines = params.questions
-    .slice(0, 120)
-    .map((q, idx) => `${idx + 1}. (${q.freq}) ${q.text}`)
-    .join("\n");
+  const lines = buildQuestionLines(params.questions, false);
 
   return `
 You are analyzing monthly chatbot questions.
@@ -104,6 +200,179 @@ Rules:
 Questions:
 ${lines}
 `.trim();
+}
+
+function buildUnansweredPrompt(params: {
+  monthLabel: string;
+  pageType: PageType;
+  questions: QuestionInput[];
+}) {
+  const lines = buildQuestionLines(params.questions, true);
+
+  return `
+You are analyzing monthly chatbot questions that were NOT answered directly.
+
+Month: ${params.monthLabel}
+Page type: ${params.pageType}
+
+Input list: common user questions with frequency counts and example assistant replies.
+Use ONLY this list. Do not invent facts or company details.
+
+Return JSON only with keys:
+- unanswered_questions: 5-10 items with fields:
+  - question: the user question (short, canonical).
+  - answer: the assistant reply example from the list.
+
+Rules:
+- Only include questions whose answer shows missing info, deflection,
+  depends-on-residence, contact-us responses, or no reply.
+- Use the question phrasing. Keep question <= 12 words.
+- Keep answer short and based on the provided A: text.
+- Answer must be a single line. Avoid double quotes in answers.
+- If not enough evidence for a list, return an empty array.
+- Do not include extra keys or commentary.
+
+Questions:
+${lines}
+`.trim();
+}
+
+function normalizeStringList(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean);
+}
+
+function normalizeUnansweredList(value: unknown): UnansweredQuestion[] {
+  if (!Array.isArray(value)) return [];
+  const items: UnansweredQuestion[] = [];
+  for (const entry of value) {
+    if (typeof entry === "string") {
+      const question = entry.trim();
+      if (question) items.push({ question, answer: "" });
+      continue;
+    }
+    if (!isRecord(entry)) continue;
+    const question =
+      typeof entry.question === "string" ? entry.question.trim() : "";
+    const answer = typeof entry.answer === "string" ? entry.answer.trim() : "";
+    if (question) items.push({ question, answer });
+  }
+  return items;
+}
+
+async function runStructuredResponse<T>(params: {
+  openai: OpenAI;
+  baseParams: Record<string, unknown>;
+  prompt: string;
+  schema: Record<string, unknown>;
+  name: string;
+  maxOutputTokens: number;
+}): Promise<StructuredRunResult<T>> {
+  const response = await params.openai.responses.create({
+    ...params.baseParams,
+    instructions: "Return JSON only.",
+    input: [{ role: "user", content: params.prompt }],
+    text: {
+      format: {
+        type: "json_schema",
+        name: params.name,
+        strict: true,
+        schema: params.schema,
+      },
+    },
+    max_output_tokens: params.maxOutputTokens,
+  });
+
+  let outputText = getResponseText(response);
+  let responseId = response.id ?? null;
+  if (!outputText) {
+    const refusal = getRefusalText(response);
+    if (refusal) {
+      throw new Error(`Model refusal (${params.name}): ${refusal}`);
+    }
+
+    const retryPrompt = `
+${params.prompt}
+
+Important:
+- Return valid JSON that matches the schema.
+- If unsure, return empty arrays/objects that still match the schema.
+`.trim();
+
+    const retryResponse = await params.openai.responses.create({
+      ...params.baseParams,
+      instructions: "Return JSON only.",
+      input: [{ role: "user", content: retryPrompt }],
+      text: {
+        format: {
+          type: "json_schema",
+          name: `${params.name}_retry`,
+          strict: true,
+          schema: params.schema,
+        },
+      },
+      max_output_tokens: params.maxOutputTokens,
+    });
+
+    outputText = getResponseText(retryResponse);
+    if (!outputText) {
+      const retryRefusal = getRefusalText(retryResponse);
+      if (retryRefusal) {
+        throw new Error(`Model refusal (${params.name} retry): ${retryRefusal}`);
+      }
+      throw new Error(`Model returned empty output (${params.name}).`);
+    }
+
+    // Prefer the retry response id if the first attempt was empty.
+    responseId = retryResponse.id ?? responseId;
+  }
+
+  try {
+    return {
+      parsed: tryParseJson(outputText),
+      responseId,
+    };
+  } catch (err: unknown) {
+    const repairPrompt = `
+Fix the JSON below so it is valid and matches the provided schema exactly.
+Return JSON only. If the content is unusable, return an empty object that
+still matches the schema.
+
+Schema:
+${JSON.stringify(params.schema)}
+
+JSON:
+${outputText}
+`.trim();
+
+    const repairResponse = await params.openai.responses.create({
+      ...params.baseParams,
+      instructions: "Return JSON only.",
+      input: [{ role: "user", content: repairPrompt }],
+      text: {
+        format: {
+          type: "json_schema",
+          name: `${params.name}_repair`,
+          strict: true,
+          schema: params.schema,
+        },
+      },
+      max_output_tokens: params.maxOutputTokens,
+    });
+
+    const repairedText = getResponseText(repairResponse);
+    if (!repairedText) {
+      throw new Error(`Model returned empty output (${params.name} repair).`);
+    }
+
+    return {
+      parsed: tryParseJson(repairedText),
+      responseId: response.id ?? null,
+      repairResponseId: repairResponse.id ?? null,
+    };
+  }
 }
 
 export async function POST(req: Request) {
@@ -135,7 +404,28 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const month = typeof body?.month === "string" ? body.month.trim() : "";
   const langRaw = typeof body?.lang === "string" ? body.lang.trim() : "";
+  const modeRaw = typeof body?.mode === "string" ? body.mode.trim() : "";
+  const pageTypeRaw =
+    typeof body?.page_type === "string" ? body.page_type.trim() : "";
   const lang = langRaw.toLowerCase();
+  const modeCandidate = modeRaw.toLowerCase();
+  const mode: RunMode =
+    modeCandidate === "top" ||
+    modeCandidate === "unanswered" ||
+    modeCandidate === "all"
+      ? (modeCandidate as RunMode)
+      : "all";
+  const pageTypeCandidate = pageTypeRaw.toLowerCase();
+  const pageType: RunPageType =
+    pageTypeCandidate === "corporate" ||
+    pageTypeCandidate === "residence" ||
+    pageTypeCandidate === "all"
+      ? (pageTypeCandidate as RunPageType)
+      : "all";
+  const runTop = mode === "all" || mode === "top";
+  const runUnanswered = mode === "all" || mode === "unanswered";
+  const targetPageTypes =
+    pageType === "all" ? PAGE_TYPES : ([pageType] as PageType[]);
   const parsedMonth = parseMonth(month);
   if (!parsedMonth) {
     return NextResponse.json(
@@ -147,24 +437,6 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { ok: false, error: "Invalid language. Use 'en' or 'fr'." },
       { status: 400 }
-    );
-  }
-
-  const { data: existingRows, error: existingErr } = await supabase
-    .from("chat_monthly_insights")
-    .select("id")
-    .eq("month", parsedMonth.startDate)
-    .eq("lang", lang)
-    .limit(1);
-
-  if (existingErr) {
-    return NextResponse.json({ ok: false, error: existingErr.message }, { status: 500 });
-  }
-
-  if ((existingRows ?? []).length > 0) {
-    return NextResponse.json(
-      { ok: false, error: "Insights already exist for this month and language." },
-      { status: 409 }
     );
   }
 
@@ -182,20 +454,67 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: rowsErr.message }, { status: 500 });
   }
 
-  const grouped = new Map<PageType, Array<{ text: string; freq: number }>>();
+  const { data: existingRows, error: existingErr } = await supabase
+    .from("chat_monthly_insights")
+    .select("id,page_type,summary,raw")
+    .eq("month", parsedMonth.startDate)
+    .eq("lang", lang);
+
+  if (existingErr) {
+    return NextResponse.json({ ok: false, error: existingErr.message }, { status: 500 });
+  }
+
+  const existingByType = new Map<
+    PageType,
+    { summary?: unknown; raw?: unknown }
+  >();
+  for (const row of (existingRows ?? []) as Array<{
+    page_type: string;
+    summary: unknown;
+    raw: unknown;
+  }>) {
+    const pageType = row.page_type as PageType;
+    if (!PAGE_TYPES.includes(pageType)) continue;
+    existingByType.set(pageType, { summary: row.summary, raw: row.raw });
+  }
+
+  const grouped = new Map<
+    PageType,
+    Array<{ text: string; freq: number; answer: string }>
+  >();
   for (const row of (rows ?? []) as QuestionRow[]) {
     const pageType = row.page_type as PageType;
     if (!PAGE_TYPES.includes(pageType)) continue;
     const text = (row.example || row.question || "").trim();
     if (!text) continue;
     const freq = Number(row.freq ?? 0);
+    const answer = (row.answer_example || "").trim();
     const list = grouped.get(pageType) ?? [];
-    list.push({ text, freq });
+    list.push({ text, freq, answer });
     grouped.set(pageType, list);
   }
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const model = process.env.OPENAI_ANALYSIS_MODEL ?? MODEL_FALLBACK;
+  const reasoningEffortRaw = process.env.OPENAI_REASONING_EFFORT
+    ?.trim()
+    .toLowerCase();
+  const reasoningEffort: ReasoningEffort = (
+    reasoningEffortRaw &&
+    ["none", "minimal", "low", "medium", "high", "xhigh"].includes(
+      reasoningEffortRaw
+    )
+      ? reasoningEffortRaw
+      : "high"
+  ) as ReasoningEffort;
+  const supportsReasoning = /^gpt-5/i.test(model) || /^o\d/i.test(model);
+  const reasoning = supportsReasoning ? { effort: reasoningEffort } : undefined;
+  const supportsTemperature = !supportsReasoning;
+  const baseParams = {
+    model,
+    ...(supportsTemperature ? { temperature: 0 } : {}),
+    ...(reasoning ? { reasoning } : {}),
+  };
 
   const results: Array<{
     page_type: PageType;
@@ -204,7 +523,7 @@ export async function POST(req: Request) {
     row?: unknown;
   }> = [];
 
-  for (const pageType of PAGE_TYPES) {
+  for (const pageType of targetPageTypes) {
     const questions = (grouped.get(pageType) ?? []).sort(
       (a, b) => b.freq - a.freq
     );
@@ -218,41 +537,94 @@ export async function POST(req: Request) {
     }
 
     try {
-      const prompt = buildPrompt({
-        monthLabel: parsedMonth.label,
-        pageType,
-        questions,
-      });
+      let topParsed: unknown = null;
+      let unansweredParsed: unknown = null;
+      let topResponseId: string | null = null;
+      let unansweredResponseId: string | null = null;
+      let topRepairId: string | null = null;
+      let unansweredRepairId: string | null = null;
 
-      const r = await openai.responses.create({
-        model,
-        instructions: "Return JSON only.",
-        input: [{ role: "user", content: prompt }],
-        text: {
-          format: {
-            type: "json_schema",
-            name: "monthly_chat_insights",
-            strict: true,
-            schema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                top_questions: { type: "array", items: { type: "string" } },
-                top_intents: { type: "array", items: { type: "string" } },
-              },
-              required: ["top_questions", "top_intents"],
-            },
-          },
-        },
-        max_output_tokens: 900,
-      });
+      if (runTop) {
+        const topPrompt = buildTopPrompt({
+          monthLabel: parsedMonth.label,
+          pageType,
+          questions,
+        });
 
-      const outText = getResponseText(r);
-      if (!outText) {
-        throw new Error("Model returned empty output");
+        const topResult = await runStructuredResponse({
+          openai,
+          baseParams,
+          prompt: topPrompt,
+          schema: TOP_SCHEMA,
+          name: "monthly_chat_insights_top",
+          maxOutputTokens: 700,
+        });
+
+        topParsed = topResult.parsed;
+        topResponseId = topResult.responseId;
+        topRepairId = topResult.repairResponseId ?? null;
       }
 
-      const parsed = tryParseJson(outText);
+      if (runUnanswered) {
+        const unansweredPrompt = buildUnansweredPrompt({
+          monthLabel: parsedMonth.label,
+          pageType,
+          questions,
+        });
+
+        const unansweredResult = await runStructuredResponse({
+          openai,
+          baseParams,
+          prompt: unansweredPrompt,
+          schema: UNANSWERED_SCHEMA,
+          name: "monthly_chat_unanswered_questions",
+          maxOutputTokens: 900,
+        });
+
+        unansweredParsed = unansweredResult.parsed;
+        unansweredResponseId = unansweredResult.responseId;
+        unansweredRepairId = unansweredResult.repairResponseId ?? null;
+      }
+
+      const existing = existingByType.get(pageType);
+      const existingSummary = (isRecord(existing?.summary)
+        ? existing?.summary
+        : {}) as Record<string, unknown>;
+      const existingRaw = (isRecord(existing?.raw) ? existing?.raw : {}) as Record<
+        string,
+        unknown
+      >;
+      const existingResponseIds = (isRecord(existingRaw.response_ids)
+        ? existingRaw.response_ids
+        : {}) as Record<string, unknown>;
+
+      const summary = {
+        top_questions: runTop
+          ? normalizeStringList((topParsed as Record<string, unknown>)?.top_questions)
+          : normalizeStringList(existingSummary?.top_questions),
+        top_intents: runTop
+          ? normalizeStringList((topParsed as Record<string, unknown>)?.top_intents)
+          : normalizeStringList(existingSummary?.top_intents),
+        unanswered_questions: runUnanswered
+          ? normalizeUnansweredList(
+              (unansweredParsed as Record<string, unknown>)?.unanswered_questions
+            )
+          : normalizeUnansweredList(existingSummary?.unanswered_questions),
+      };
+
+      const raw = {
+        ...existingRaw,
+        response_ids: {
+          ...existingResponseIds,
+          ...(runTop ? { top: topResponseId } : {}),
+          ...(runTop && topRepairId ? { top_repair: topRepairId } : {}),
+          ...(runUnanswered ? { unanswered: unansweredResponseId } : {}),
+          ...(runUnanswered && unansweredRepairId
+            ? { unanswered_repair: unansweredRepairId }
+            : {}),
+        },
+        input_count: questions.length,
+      };
 
       const { data: inserted, error: insertErr } = await supabase
         .from("chat_monthly_insights")
@@ -264,11 +636,8 @@ export async function POST(req: Request) {
             source: "manual",
             model,
             prompt_version: PROMPT_VERSION,
-            summary: parsed,
-            raw: {
-              response_id: r.id ?? null,
-              input_count: questions.length,
-            },
+            summary,
+            raw,
             created_by: user.id,
           },
           { onConflict: "month,page_type,lang,source" }
@@ -289,6 +658,8 @@ export async function POST(req: Request) {
     ok: true,
     month: parsedMonth.label,
     lang,
+    mode,
+    page_type: pageType,
     processed: results.filter((r) => r.ok).length,
     results,
   });
