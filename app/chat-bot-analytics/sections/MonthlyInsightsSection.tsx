@@ -15,6 +15,9 @@ type MonthlyInsightsSectionProps = {
 };
 
 type InsightSummary = Record<string, unknown> | null;
+type UnansweredItem = { question: string; answer: string };
+type RunMode = "top" | "unanswered" | "all";
+type PageType = "corporate" | "residence";
 
 type InsightRow = {
   id: number;
@@ -31,11 +34,93 @@ type InsightRow = {
 type RunResult = {
   ok: boolean;
   month: string;
+  mode: RunMode;
+  page_type: "corporate" | "residence" | "all";
   processed: number;
   results: Array<{ page_type: string; ok: boolean; error?: string }>;
 };
 
 const promptByVersion: Record<string, string> = {
+  v3: `
+Request A: Top questions + intents
+
+You are analyzing monthly chatbot questions.
+
+Month: {{month}}
+Page type: {{page_type}}
+
+Input list: common user questions with frequency counts.
+Use ONLY this list. Do not invent facts or company details.
+
+Return JSON only with keys:
+- top_questions: 5-10 most common questions (short, canonical).
+- top_intents: 5-10 intent labels.
+
+Rules:
+- Keep each item short (<= 12 words).
+- If not enough evidence for a list, return an empty array.
+- Ignore greetings, acknowledgements, or non-question fragments. Only output clear user questions and intents.
+- Do not include extra keys or commentary.
+
+Questions:
+1. (12) Example question
+2. (9) Another example question
+
+Request B: Unanswered questions + answers
+
+You are analyzing monthly chatbot questions that were NOT answered directly.
+
+Month: {{month}}
+Page type: {{page_type}}
+
+Input list: common user questions with frequency counts and example assistant replies.
+Use ONLY this list. Do not invent facts or company details.
+
+Return JSON only with keys:
+- unanswered_questions: 5-10 items with fields:
+  - question: the user question (short, canonical).
+  - answer: the assistant reply example from the list.
+
+Rules:
+- Only include questions whose answer shows missing info, deflection,
+  depends-on-residence, contact-us responses, or no reply.
+- Use the question phrasing. Keep question <= 12 words.
+- Keep answer short and based on the provided A: text.
+- Answer must be a single line. Avoid double quotes in answers.
+- If not enough evidence for a list, return an empty array.
+- Do not include extra keys or commentary.
+
+Questions:
+1. (12) Q: Example question | A: Example answer
+2. (9) Q: Another example question | A: [no reply]
+`.trim(),
+  v2: `
+You are analyzing monthly chatbot questions.
+
+Month: {{month}}
+Page type: {{page_type}}
+
+Input list: common user questions with frequency counts and example assistant replies.
+Use ONLY this list. Do not invent facts or company details.
+
+Return JSON only with keys:
+- top_questions: 5-10 most common questions (short, canonical).
+- top_intents: 5-10 intent labels.
+- unanswered_questions: 5-10 questions where the assistant did NOT answer directly.
+
+Rules:
+- Keep each item short (<= 12 words).
+- If not enough evidence for a list, return an empty array.
+- Ignore greetings, acknowledgements, or non-question fragments. Only output clear user questions and intents.
+- For unanswered_questions, only include questions whose answer shows missing info, deflection,
+  depends-on-residence, contact-us responses, or no reply.
+- Use the question phrasing for unanswered_questions. Do not include answers.
+- Do not include extra keys or commentary.
+
+Questions:
+1. (12) Q: Example question | A: Example answer
+2. (9) Q: Another example question | A: [no reply]
+`.trim(),
   v1: `
 You are analyzing monthly chatbot questions.
 
@@ -98,10 +183,29 @@ function toList(value: unknown): string[] {
     .filter(Boolean);
 }
 
+function toUnansweredList(value: unknown): UnansweredItem[] {
+  if (!Array.isArray(value)) return [];
+  const items: UnansweredItem[] = [];
+  for (const entry of value) {
+    if (typeof entry === "string") {
+      const question = entry.trim();
+      if (question) items.push({ question, answer: "" });
+      continue;
+    }
+    if (!entry || typeof entry !== "object") continue;
+    const record = entry as Record<string, unknown>;
+    const question =
+      typeof record.question === "string" ? record.question.trim() : "";
+    const answer = typeof record.answer === "string" ? record.answer.trim() : "";
+    if (question) items.push({ question, answer });
+  }
+  return items;
+}
+
 export function MonthlyInsightsSection({ isAdmin }: MonthlyInsightsSectionProps) {
   const supabase = useMemo(() => createClient(), []);
   const [month, setMonth] = useState(() => defaultMonthValue());
-  const [running, setRunning] = useState(false);
+  const [runningKey, setRunningKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<RunResult | null>(null);
   const [existingInsights, setExistingInsights] = useState<InsightRow[]>([]);
@@ -116,6 +220,11 @@ export function MonthlyInsightsSection({ isAdmin }: MonthlyInsightsSectionProps)
   const pageOrder = ["corporate", "residence"] as const;
 
   const hasExisting = existingInsights.length > 0;
+  const running = runningKey !== null;
+
+  const keyFor = (mode: RunMode, pageType: PageType) => `${mode}:${pageType}`;
+  const isRunning = (mode: RunMode, pageType: PageType) =>
+    runningKey === keyFor(mode, pageType);
 
   useEffect(() => {
     let active = true;
@@ -164,23 +273,19 @@ export function MonthlyInsightsSection({ isAdmin }: MonthlyInsightsSectionProps)
     };
   }, [month, lang, supabase]);
 
-  const runInsights = async () => {
+  const runInsights = async (mode: RunMode, pageType: PageType) => {
     if (!month) {
       setError("Select a month.");
       return;
     }
-    if (hasExisting) {
-      setError(`Insights already exist for this month (${lang.toUpperCase()}).`);
-      return;
-    }
-    setRunning(true);
+    setRunningKey(keyFor(mode, pageType));
     setError(null);
     setResult(null);
     try {
       const res = await fetch("/api/analytics/monthly-insights", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ month, lang }),
+        body: JSON.stringify({ month, lang, mode, page_type: pageType }),
       });
       const data = (await res.json()) as RunResult & { error?: string };
       if (!res.ok || !data?.ok) {
@@ -203,7 +308,7 @@ export function MonthlyInsightsSection({ isAdmin }: MonthlyInsightsSectionProps)
       const message = err instanceof Error ? err.message : "Failed to run.";
       setError(message);
     } finally {
-      setRunning(false);
+      setRunningKey(null);
     }
   };
 
@@ -281,12 +386,12 @@ export function MonthlyInsightsSection({ isAdmin }: MonthlyInsightsSectionProps)
             <h2 className="text-lg font-semibold">Monthly insights</h2>
             <InfoDialog
               title="Monthly insights"
-              summary="Run a month-based OpenAI summary for corporate and residence pages."
+              summary="Run a month-based OpenAI summary (two passes) for corporate and residence pages."
             >
               <p>
                 <span className="font-medium text-foreground">What it does:</span>{" "}
-                Uses common user questions for the selected month and asks OpenAI to
-                produce the top questions and intents.
+                Uses common user questions for top questions/intents, then runs a
+                second pass to capture unanswered questions with example replies.
               </p>
               <p>
                 <span className="font-medium text-foreground">When to use:</span>{" "}
@@ -302,7 +407,7 @@ export function MonthlyInsightsSection({ isAdmin }: MonthlyInsightsSectionProps)
             variant="secondary"
             size="sm"
             onClick={() => {
-              const version = "v1";
+              const version = "v3";
               setPromptVersion(version);
               setPromptText(
                 promptByVersion[version] ?? "Prompt not found for this version."
@@ -342,10 +447,39 @@ export function MonthlyInsightsSection({ isAdmin }: MonthlyInsightsSectionProps)
             </div>
           </div>
           <Button
-            onClick={runInsights}
-            disabled={!isAdmin || running || !month || hasExisting || loadingExisting}
+            onClick={() => runInsights("top", "corporate")}
+            disabled={!isAdmin || running || !month || loadingExisting}
           >
-            {running ? "Running..." : "Run monthly insights"}
+            {isRunning("top", "corporate")
+              ? "Running..."
+              : "Run corporate top questions/intents"}
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => runInsights("top", "residence")}
+            disabled={!isAdmin || running || !month || loadingExisting}
+          >
+            {isRunning("top", "residence")
+              ? "Running..."
+              : "Run residence top questions/intents"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => runInsights("unanswered", "corporate")}
+            disabled={!isAdmin || running || !month || loadingExisting}
+          >
+            {isRunning("unanswered", "corporate")
+              ? "Running..."
+              : "Run corporate unanswered questions"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => runInsights("unanswered", "residence")}
+            disabled={!isAdmin || running || !month || loadingExisting}
+          >
+            {isRunning("unanswered", "residence")
+              ? "Running..."
+              : "Run residence unanswered questions"}
           </Button>
           {hasExisting ? (
             <Button
@@ -370,7 +504,7 @@ export function MonthlyInsightsSection({ isAdmin }: MonthlyInsightsSectionProps)
           {hasExisting ? (
             <div className="text-xs text-muted-foreground">
               Insights already exist for {formatMonthLabel(month)} (
-              {lang.toUpperCase()}). Delete records to rerun.
+              {lang.toUpperCase()}). Running again will update the selected section.
             </div>
           ) : null}
           {existingError ? (
@@ -381,7 +515,8 @@ export function MonthlyInsightsSection({ isAdmin }: MonthlyInsightsSectionProps)
             <div className="space-y-2 text-sm text-muted-foreground">
               <div>
                 Saved insights for {formatMonthLabel(result.month)}. Processed{" "}
-                {processed} page type{processed === 1 ? "" : "s"}.
+                {processed} page type{processed === 1 ? "" : "s"}. Mode:{" "}
+                {result.mode}. Page type: {result.page_type}.
               </div>
               <div className="space-y-1 text-xs">
                 {result.results.map((row) => (
@@ -422,6 +557,9 @@ export function MonthlyInsightsSection({ isAdmin }: MonthlyInsightsSectionProps)
               );
               const topIntents = toList(
                 (summary as Record<string, unknown>).top_intents
+              );
+              const unansweredQuestions = toUnansweredList(
+                (summary as Record<string, unknown>).unanswered_questions
               );
               return (
                 <Card key={pageType} className="p-5 space-y-4">
@@ -481,6 +619,31 @@ export function MonthlyInsightsSection({ isAdmin }: MonthlyInsightsSectionProps)
                         <div className="text-xs text-muted-foreground">—</div>
                       )}
                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Unanswered questions
+                    </div>
+                    {unansweredQuestions.length ? (
+                      <ol className="text-sm space-y-2">
+                        {unansweredQuestions.map((item, idx) => (
+                          <li key={`u-${idx}`} className="flex gap-2">
+                            <span className="text-xs text-muted-foreground w-5 text-right">
+                              {idx + 1}.
+                            </span>
+                            <div className="space-y-1">
+                              <div>{item.question}</div>
+                              <div className="text-xs text-muted-foreground">
+                                Answer: {item.answer || "—"}
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <div className="text-xs text-muted-foreground">—</div>
+                    )}
                   </div>
                 </Card>
               );
