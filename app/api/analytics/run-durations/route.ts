@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     : 0;
 
   const { data: targets, error: targetsErr } = await supabase.rpc(
-    "chat_visitors_needing_duration",
+    "chat_sessions_needing_duration",
     {
       p_cutoff_days: cutoffDays,
       p_limit: limit,
@@ -61,6 +61,7 @@ export async function POST(req: Request) {
   }
 
   const results: Array<{
+    session_id: string;
     visitor_id: string;
     last_message_at: string;
     ok: boolean;
@@ -69,10 +70,12 @@ export async function POST(req: Request) {
   }> = [];
 
   for (const row of (targets ?? []) as Array<{
+    session_id: string;
     visitor_id: string;
     first_message_at: string;
     last_message_at: string;
   }>) {
+    const sessionId = row.session_id;
     const visitorId = row.visitor_id;
     const firstMessageAt = row.first_message_at;
     const lastMessageAt = row.last_message_at;
@@ -90,9 +93,10 @@ export async function POST(req: Request) {
       );
 
       const { error: upsertErr } = await supabase
-        .from("chat_visitor_durations")
+        .from("chat_session_durations")
         .upsert(
           {
+            session_id: sessionId,
             visitor_id: visitorId,
             first_message_at: firstMessageAt,
             last_message_at: lastMessageAt,
@@ -100,12 +104,13 @@ export async function POST(req: Request) {
             source: "auto",
             created_at: new Date().toISOString(),
           },
-          { onConflict: "visitor_id,last_message_at,source" }
+          { onConflict: "session_id,last_message_at,source" }
         );
 
       if (upsertErr) throw upsertErr;
 
       results.push({
+        session_id: sessionId,
         visitor_id: visitorId,
         last_message_at: lastMessageAt,
         duration_seconds: durationSeconds,
@@ -113,6 +118,7 @@ export async function POST(req: Request) {
       });
     } catch (err: unknown) {
       results.push({
+        session_id: sessionId,
         visitor_id: visitorId,
         last_message_at: lastMessageAt,
         ok: false,

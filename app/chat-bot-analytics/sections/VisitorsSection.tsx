@@ -21,7 +21,7 @@ import { DateRangePicker } from "./DateRangePicker";
 import type {
   ConversationAnalysis,
   VisitorAnalysisRow,
-  VisitorDurationRow,
+  SessionDurationRow,
 } from "@/app/types/types";
 import {
   AlertDialog,
@@ -95,7 +95,7 @@ interface VisitorsProps {
   reviewRequestsByVisitor: Map<string, ReviewRequestLite>;
   onRequestReview: (visitorId: string, comment: string) => Promise<void>;
   analysisByVisitor: Map<string, VisitorAnalysisRow>;
-  durationByVisitor: Map<string, VisitorDurationRow>;
+  durationByVisitor: Map<string, SessionDurationRow>;
   analysisLoadingVisitorId: string | null;
   onAnalyzeVisitor: (visitorId: string) => Promise<ConversationAnalysis>;
   isAdmin: boolean;

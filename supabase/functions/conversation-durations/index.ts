@@ -3,6 +3,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
 
 type TargetRow = {
+  session_id: string;
   visitor_id: string;
   first_message_at: string;
   last_message_at: string;
@@ -57,7 +58,7 @@ Deno.serve(async (req) => {
   });
 
   const { data: targets, error: targetsErr } = await supabase.rpc(
-    "chat_visitors_needing_duration",
+    "chat_sessions_needing_duration",
     {
       p_cutoff_days: cutoffDays,
       p_limit: limit,
@@ -74,6 +75,7 @@ Deno.serve(async (req) => {
   }
 
   const results: Array<{
+    session_id: string;
     visitor_id: string;
     last_message_at: string;
     ok: boolean;
@@ -82,6 +84,7 @@ Deno.serve(async (req) => {
   }> = [];
 
   for (const row of (targets ?? []) as TargetRow[]) {
+    const sessionId = row.session_id as string;
     const visitorId = row.visitor_id as string;
     const firstMessageAt = row.first_message_at as string;
     const lastMessageAt = row.last_message_at as string;
@@ -99,9 +102,10 @@ Deno.serve(async (req) => {
       );
 
       const { error: upsertErr } = await supabase
-        .from("chat_visitor_durations")
+        .from("chat_session_durations")
         .upsert(
           {
+            session_id: sessionId,
             visitor_id: visitorId,
             first_message_at: firstMessageAt,
             last_message_at: lastMessageAt,
@@ -109,12 +113,13 @@ Deno.serve(async (req) => {
             source: "auto",
             created_at: new Date().toISOString(),
           },
-          { onConflict: "visitor_id,last_message_at,source" }
+          { onConflict: "session_id,last_message_at,source" }
         );
 
       if (upsertErr) throw upsertErr;
 
       results.push({
+        session_id: sessionId,
         visitor_id: visitorId,
         last_message_at: lastMessageAt,
         duration_seconds: durationSeconds,
@@ -122,6 +127,7 @@ Deno.serve(async (req) => {
       });
     } catch (err: any) {
       results.push({
+        session_id: sessionId,
         visitor_id: visitorId,
         last_message_at: lastMessageAt,
         ok: false,
