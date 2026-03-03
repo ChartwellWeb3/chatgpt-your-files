@@ -10,13 +10,26 @@ type TranscriptItem = {
   content: string;
 };
 
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function hasStringContent(
+  value: unknown,
+): value is { role?: unknown; content: string } {
+  return isRecord(value) && typeof value.content === "string";
+}
+
+function normalizeRole(value: unknown): TranscriptItem["role"] {
+  return value === "assistant" || value === "system" ? value : "user";
+}
+
 function getResponseText(r: unknown) {
-  if (isRecord(r) && typeof r.output_text === "string" && r.output_text.trim()) {
+  if (
+    isRecord(r) &&
+    typeof r.output_text === "string" &&
+    r.output_text.trim()
+  ) {
     return r.output_text.trim();
   }
 
@@ -50,7 +63,7 @@ export async function POST(req: Request) {
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json(
       { ok: false, error: "Missing OPENAI_API_KEY" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
@@ -61,24 +74,30 @@ export async function POST(req: Request) {
   } = await supabase.auth.getUser();
 
   if (userErr || !user) {
-    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: "Unauthorized" },
+      { status: 401 },
+    );
   }
 
   const body = await req.json().catch(() => ({}));
   const transcript = Array.isArray(body?.transcript) ? body.transcript : [];
   const promptOverride =
-    typeof body?.prompt_override === "string" ? body.prompt_override.trim() : "";
-  const sanitized = transcript
-    .filter((m: any) => m && typeof m.content === "string")
-    .map((m: any) => ({
-      role: m.role === "assistant" || m.role === "system" ? m.role : "user",
+    typeof body?.prompt_override === "string"
+      ? body.prompt_override.trim()
+      : "";
+  const responseFormat = body?.response_format === "text" ? "text" : "json";
+  const sanitized: TranscriptItem[] = transcript
+    .filter(hasStringContent)
+    .map((m: { role: unknown; content: unknown; }) => ({
+      role: normalizeRole(m.role),
       content: m.content,
-    })) as TranscriptItem[];
+    }));
 
   if (!sanitized.length) {
     return NextResponse.json(
       { ok: false, error: "Transcript is required" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -94,17 +113,25 @@ export async function POST(req: Request) {
   };
 
   const instructions = promptOverride || analyzerInstructions();
+  const inputContent =
+    responseFormat === "json"
+      ? `Return JSON only.\n\nPayload:\n${JSON.stringify(payload)}`
+      : `Payload:\n${JSON.stringify(payload)}`;
 
-  const r = await openai.responses.create({
+  const request: Parameters<typeof openai.responses.create>[0] = {
     model,
     instructions,
     input: [
       {
         role: "user",
-        content: `Return JSON only.\n\nPayload:\n${JSON.stringify(payload)}`,
+        content: inputContent,
       },
     ],
-    text: {
+    max_output_tokens: 1600,
+  };
+
+  if (responseFormat === "json") {
+    request.text = {
       format: {
         type: "json_schema",
         name: "conversation_analysis",
@@ -140,6 +167,28 @@ export async function POST(req: Request) {
               },
               required: ["visitor_goal", "goal_met", "key_quotes"],
             },
+            missed_or_weak_answers: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  visitor_question: { type: "string" },
+                  assistant_response: { type: "string" },
+                  issue_type: {
+                    type: "string",
+                    enum: ["unanswered", "partial", "vague", "incorrect"],
+                  },
+                  why_insufficient: { type: "string" },
+                },
+                required: [
+                  "visitor_question",
+                  "assistant_response",
+                  "issue_type",
+                  "why_insufficient",
+                ],
+              },
+            },
           },
           required: [
             "satisfaction_1_to_10",
@@ -147,15 +196,23 @@ export async function POST(req: Request) {
             "improvement",
             "summary",
             "evidence",
+            "missed_or_weak_answers",
           ],
         },
       },
-    },
-    max_output_tokens: 800,
-  });
+    };
+  }
+
+  const r = await openai.responses.create(request);
 
   const outText = getResponseText(r);
-  const parsed = outText ? tryParseJson(outText) : null;
+  const parsed =
+    responseFormat === "json" && outText ? tryParseJson(outText) : null;
 
-  return NextResponse.json({ ok: true, output: outText, parsed });
+  return NextResponse.json({
+    ok: true,
+    output: outText,
+    parsed,
+    format: responseFormat,
+  });
 }

@@ -147,10 +147,14 @@ export default function PromptTestingPage() {
   const [analyzerOutput, setAnalyzerOutput] = useState("");
   const [analyzerParsed, setAnalyzerParsed] = useState<any | null>(null);
   const [analyzerLoading, setAnalyzerLoading] = useState(false);
+  const [analyzerResponseFormat, setAnalyzerResponseFormat] = useState<
+    "json" | "text"
+  >("text");
   const [visitorSearch, setVisitorSearch] = useState("");
   const [selectedVisitorId, setSelectedVisitorId] = useState<string>("");
   const [visitorPage, setVisitorPage] = useState(0);
   const visitorPageSize = 20;
+  const visitorSearchTerm = visitorSearch.trim();
 
   useEffect(() => {
     const loadUser = async () => {
@@ -191,15 +195,18 @@ export default function PromptTestingPage() {
     data: visitorsResult,
     isLoading: loadingVisitors,
   } = useQuery({
-    queryKey: ["prompt-testing-visitors", visitorPage],
+    queryKey: ["prompt-testing-visitors", visitorPage, visitorSearchTerm],
     queryFn: async () => {
       const from = visitorPage * visitorPageSize;
       const to = from + visitorPageSize - 1;
-      const { data, error, count } = await supabase
+      let query = supabase
         .from("visitors")
         .select("id,created_at", { count: "exact" })
-        .order("created_at", { ascending: false })
-        .range(from, to);
+        .order("created_at", { ascending: false });
+      if (visitorSearchTerm) {
+        query = query.ilike("id", `%${visitorSearchTerm}%`);
+      }
+      const { data, error, count } = await query.range(from, to);
       if (error) throw error;
       return {
         rows: (data ?? []) as VisitorRow[],
@@ -220,10 +227,14 @@ export default function PromptTestingPage() {
   );
 
   const filteredVisitors = useMemo(() => {
-    const q = visitorSearch.trim().toLowerCase();
+    const q = visitorSearchTerm.toLowerCase();
     if (!q) return visitors;
     return visitors.filter((v) => v.id.toLowerCase().includes(q));
-  }, [visitors, visitorSearch]);
+  }, [visitors, visitorSearchTerm]);
+
+  useEffect(() => {
+    setVisitorPage(0);
+  }, [visitorSearchTerm]);
 
   const { data: visitorMessages = [], isLoading: loadingVisitorMessages } =
     useQuery({
@@ -766,6 +777,7 @@ export default function PromptTestingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           transcript,
+          response_format: analyzerResponseFormat,
           prompt_override:
             analyzerActivePromptText && analyzerActivePromptText.trim()
               ? analyzerActivePromptText
@@ -1215,6 +1227,27 @@ export default function PromptTestingPage() {
                   array of messages.
                 </p>
               </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Output format
+                </label>
+                <Select
+                  value={analyzerResponseFormat}
+                  onValueChange={(value) =>
+                    setAnalyzerResponseFormat(
+                      value === "json" ? "json" : "text"
+                    )
+                  }
+                >
+                  <SelectTrigger className="h-8 w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="text">Plain text</SelectItem>
+                    <SelectItem value="json">JSON</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <Button
                 onClick={runAnalyzer}
                 disabled={analyzerLoading || !analyzerInput.trim()}
@@ -1226,7 +1259,7 @@ export default function PromptTestingPage() {
                   Output
                 </label>
                 <div className="rounded-md border border-border bg-background/40 p-3 text-xs font-mono whitespace-pre-wrap min-h-[160px]">
-                  {analyzerParsed
+                  {analyzerResponseFormat === "json" && analyzerParsed
                     ? JSON.stringify(analyzerParsed, null, 2)
                     : analyzerOutput || "Analyzer output will appear here."}
                 </div>
