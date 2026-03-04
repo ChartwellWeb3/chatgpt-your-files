@@ -462,8 +462,12 @@ export async function POST(req: Request) {
     })
     .filter(
       (entry): entry is MissedAnswer =>
-        !!entry &&
-        (entry.visitor_question || entry.assistant_response || entry.why_insufficient)
+        Boolean(entry) &&
+        Boolean(
+          entry.visitor_question ||
+            entry.assistant_response ||
+            entry.why_insufficient
+        )
     );
 
   const analysis = {
