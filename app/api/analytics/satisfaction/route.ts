@@ -6,6 +6,35 @@ export const runtime = "nodejs";
 
 const PROMPT_VERSION = "v1";
 const MODEL_FALLBACK = "gpt-5.2";
+const INTENT_ENUM = [
+  "pricing_and_costs",
+  "waitlist_or_availability",
+  "tour_booking",
+  "finding_residence",
+  "living_and_care_options",
+  "assisted_living",
+  "independent_living",
+  "memory_care",
+  "respite_short_term",
+  "amenities_and_services",
+  "dining_nutrition",
+  "wellness_healthcare",
+  "activities_events",
+  "location_neighborhood",
+  "transportation",
+  "move_in_process",
+  "policies_and_rules",
+  "pet_policy",
+  "accessibility",
+  "caregiver_family_support",
+  "billing_payments",
+  "forms_documents",
+  "careers",
+  "corporate_information",
+  "contact_support",
+  "other",
+  "unknown",
+] as const;
 
 type TranscriptItem = {
   role: "user" | "assistant" | "system";
@@ -28,13 +57,24 @@ Return JSON only with exactly these keys:
 {
   "satisfaction_1_to_10": number,
   "sentiment": "satisfied" | "neutral" | "angry" | "unknown",
+  "intent_primary": "pricing_and_costs" | "waitlist_or_availability" | "tour_booking" | "finding_residence" | "living_and_care_options" | "assisted_living" | "independent_living" | "memory_care" | "respite_short_term" | "amenities_and_services" | "dining_nutrition" | "wellness_healthcare" | "activities_events" | "location_neighborhood" | "transportation" | "move_in_process" | "policies_and_rules" | "pet_policy" | "accessibility" | "caregiver_family_support" | "billing_payments" | "forms_documents" | "careers" | "corporate_information" | "contact_support" | "other" | "unknown",
+  "intents": string[],
+  "intent_other": string,
   "improvement": string,
   "summary": string,
   "evidence": {
     "visitor_goal": string,
     "goal_met": "yes" | "partial" | "no" | "unknown",
     "key_quotes": string[]
-  }
+  },
+  "missed_or_weak_answers": [
+    {
+      "visitor_question": string,
+      "assistant_response": string,
+      "issue_type": "unanswered",
+      "why_insufficient": string
+    }
+  ]
  }
 
 Scoring rubric (be consistent):
@@ -55,6 +95,19 @@ Evidence rules:
 - goal_met: yes/partial/no/unknown based on transcript outcomes.
 - key_quotes: 1–3 short exact quotes (<= 20 words each) from the transcript that justify score/sentiment.
   If transcript is extremely short, provide an empty array.
+
+Intent rules:
+- intent_primary: choose exactly one from the list above.
+- intents: 0–3 items from the same list. Include intent_primary if it is not "unknown".
+- Use "other" only if none fit; then set intent_other to a short label (<= 4 words). Otherwise intent_other must be "".
+- If intent is unclear, set intent_primary to "unknown" and intents to [].
+
+Missed/weak answer rules:
+- missed_or_weak_answers: 0–3 items. Use exact wording from the transcript when possible.
+- visitor_question: the user's question or request.
+- assistant_response: the assistant reply tied to that question.
+- issue_type: must be "unanswered".
+- why_insufficient: one short sentence explaining the gap.
 
 Output rules:
 - JSON only. No markdown.
@@ -121,6 +174,38 @@ function normalizeGoalMet(value: unknown) {
   return "unknown";
 }
 
+type IntentType = (typeof INTENT_ENUM)[number];
+const ISSUE_TYPE_ENUM = ["unanswered"] as const;
+type IssueType = (typeof ISSUE_TYPE_ENUM)[number];
+
+function normalizeIntent(value: unknown): IntentType {
+  const v = typeof value === "string" ? value.trim() : "";
+  return (INTENT_ENUM as readonly string[]).includes(v)
+    ? (v as IntentType)
+    : "unknown";
+}
+
+function normalizeIntentList(value: unknown): IntentType[] {
+  if (!Array.isArray(value)) return [];
+  const next: IntentType[] = [];
+  for (const entry of value) {
+    const intent = normalizeIntent(entry);
+    if (intent && !next.includes(intent)) next.push(intent);
+  }
+  return next;
+}
+
+function normalizeIssueType(value: unknown): IssueType {
+  const v = typeof value === "string" ? value.trim() : "";
+  return (ISSUE_TYPE_ENUM as readonly string[]).includes(v)
+    ? (v as IssueType)
+    : "unanswered";
+}
+
+function asString(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
 export async function POST(req: Request) {
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json(
@@ -158,7 +243,7 @@ export async function POST(req: Request) {
 
   const { data: messages, error: msgErr } = await supabase
     .from("chat_messages")
-    .select("role,content,created_at")
+    .select("role,content,created_at,session_id")
     .eq("visitor_id", visitorId)
     .order("created_at", { ascending: true });
 
@@ -172,7 +257,35 @@ export async function POST(req: Request) {
     );
   }
 
-  const lastMessageAt = messages[messages.length - 1]?.created_at;
+  const lastMessage = messages[messages.length - 1];
+  const lastMessageAt = lastMessage?.created_at;
+  const lastSessionId = lastMessage?.session_id ?? null;
+
+  let pageType: "corporate" | "residence" | "find_a_residence" | "unknown" =
+    "unknown";
+  if (lastSessionId) {
+    const { data: sessions, error: sessErr } = await supabase
+      .from("chat_sessions")
+      .select("page_url,residence_custom_id")
+      .eq("id", lastSessionId)
+      .limit(1);
+    if (!sessErr) {
+      const session = sessions?.[0];
+      const residenceCustomId =
+        typeof session?.residence_custom_id === "string"
+          ? session.residence_custom_id
+          : "";
+      const pageUrl = typeof session?.page_url === "string" ? session.page_url : "";
+      const lower = residenceCustomId.toLowerCase();
+      if (lower === "corporateen" || lower === "corporatefr") {
+        pageType = "corporate";
+      } else if (pageUrl.toLowerCase().includes("/find-a-residence")) {
+        pageType = "find_a_residence";
+      } else if (residenceCustomId) {
+        pageType = "residence";
+      }
+    }
+  }
 
   const transcript = messages.map((m) => ({
     role: m.role,
@@ -224,6 +337,18 @@ export async function POST(req: Request) {
               type: "string",
               enum: ["satisfied", "neutral", "angry", "unknown"],
             },
+            intent_primary: {
+              type: "string",
+              enum: INTENT_ENUM,
+            },
+            intents: {
+              type: "array",
+              items: {
+                type: "string",
+                enum: INTENT_ENUM,
+              },
+            },
+            intent_other: { type: "string" },
             improvement: { type: "string" },
             summary: { type: "string" },
             evidence: {
@@ -242,13 +367,39 @@ export async function POST(req: Request) {
               },
               required: ["visitor_goal", "goal_met", "key_quotes"],
             },
+            missed_or_weak_answers: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  visitor_question: { type: "string" },
+                  assistant_response: { type: "string" },
+                  issue_type: {
+                    type: "string",
+                    enum: ["unanswered"],
+                  },
+                  why_insufficient: { type: "string" },
+                },
+                required: [
+                  "visitor_question",
+                  "assistant_response",
+                  "issue_type",
+                  "why_insufficient",
+                ],
+              },
+            },
           },
           required: [
             "satisfaction_1_to_10",
             "sentiment",
+            "intent_primary",
+            "intents",
+            "intent_other",
             "improvement",
             "summary",
             "evidence",
+            "missed_or_weak_answers",
           ],
         },
       },
@@ -278,9 +429,48 @@ export async function POST(req: Request) {
     (Array.isArray(parsed?.key_quotes) && parsed.key_quotes) ||
     [];
 
+  const rawIntents = normalizeIntentList(parsed?.intents);
+  let intentPrimary = normalizeIntent(parsed?.intent_primary);
+  let intents = rawIntents;
+  if (intentPrimary === "unknown" && intents.length > 0) {
+    intentPrimary = intents[0];
+  }
+  if (intentPrimary !== "unknown" && !intents.includes(intentPrimary)) {
+    intents = [intentPrimary, ...intents];
+  }
+  let intentOther = asString(parsed?.intent_other).trim();
+  if (!intents.includes("other")) intentOther = "";
+
+  const rawMissed = Array.isArray(parsed?.missed_or_weak_answers)
+    ? parsed.missed_or_weak_answers
+    : [];
+  const missedOrWeak = rawMissed
+    .map((entry: unknown) => {
+      if (!isRecord(entry)) return null;
+      return {
+        visitor_question: asString(entry.visitor_question).trim(),
+        assistant_response: asString(entry.assistant_response).trim(),
+        issue_type: normalizeIssueType(entry.issue_type),
+        why_insufficient: asString(entry.why_insufficient).trim(),
+      };
+    })
+    .filter(
+      (entry): entry is {
+        visitor_question: string;
+        assistant_response: string;
+        issue_type: IssueType;
+        why_insufficient: string;
+      } =>
+        !!entry &&
+        (entry.visitor_question || entry.assistant_response || entry.why_insufficient)
+    );
+
   const analysis = {
     satisfaction_1_to_10: clampScore(parsed?.satisfaction_1_to_10),
     sentiment: normalizeSentiment(parsed?.sentiment),
+    intent_primary: intentPrimary,
+    intents,
+    intent_other: intentOther,
     improvement:
       typeof parsed?.improvement === "string" ? parsed.improvement : "unknown",
     summary: typeof parsed?.summary === "string" ? parsed.summary : "unknown",
@@ -289,6 +479,7 @@ export async function POST(req: Request) {
       goal_met: normalizeGoalMet(rawGoalMet),
       key_quotes: rawKeyQuotes.filter((q: unknown) => typeof q === "string"),
     },
+    missed_or_weak_answers: missedOrWeak,
   };
 
   const { data: inserted, error: insertErr } = await supabase
@@ -301,11 +492,16 @@ export async function POST(req: Request) {
       prompt_version: PROMPT_VERSION,
       satisfaction_1_to_10: analysis.satisfaction_1_to_10,
       sentiment: analysis.sentiment,
+      intent_primary: analysis.intent_primary,
+      intents: analysis.intents,
+      intent_other: analysis.intent_other,
       improvement: analysis.improvement,
       summary: analysis.summary,
       evidence_visitor_goal: analysis.evidence.visitor_goal,
       evidence_goal_met: analysis.evidence.goal_met,
       evidence_key_quotes: analysis.evidence.key_quotes,
+      missed_or_weak_answers: analysis.missed_or_weak_answers,
+      page_type: pageType,
       created_at: new Date().toISOString(),
       raw: {
         response_id: r.id ?? null,

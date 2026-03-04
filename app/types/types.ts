@@ -36,6 +36,64 @@ export type SourceRow = {
 export type ConversationAnalysis = {
   satisfaction_1_to_10: number;
   sentiment: "satisfied" | "neutral" | "angry" | "unknown";
+  intent_primary:
+    | "pricing_and_costs"
+    | "waitlist_or_availability"
+    | "tour_booking"
+    | "finding_residence"
+    | "living_and_care_options"
+    | "assisted_living"
+    | "independent_living"
+    | "memory_care"
+    | "respite_short_term"
+    | "amenities_and_services"
+    | "dining_nutrition"
+    | "wellness_healthcare"
+    | "activities_events"
+    | "location_neighborhood"
+    | "transportation"
+    | "move_in_process"
+    | "policies_and_rules"
+    | "pet_policy"
+    | "accessibility"
+    | "caregiver_family_support"
+    | "billing_payments"
+    | "forms_documents"
+    | "careers"
+    | "corporate_information"
+    | "contact_support"
+    | "other"
+    | "unknown";
+  intents: Array<
+    | "pricing_and_costs"
+    | "waitlist_or_availability"
+    | "tour_booking"
+    | "finding_residence"
+    | "living_and_care_options"
+    | "assisted_living"
+    | "independent_living"
+    | "memory_care"
+    | "respite_short_term"
+    | "amenities_and_services"
+    | "dining_nutrition"
+    | "wellness_healthcare"
+    | "activities_events"
+    | "location_neighborhood"
+    | "transportation"
+    | "move_in_process"
+    | "policies_and_rules"
+    | "pet_policy"
+    | "accessibility"
+    | "caregiver_family_support"
+    | "billing_payments"
+    | "forms_documents"
+    | "careers"
+    | "corporate_information"
+    | "contact_support"
+    | "other"
+    | "unknown"
+  >;
+  intent_other: string;
   improvement: string;
   summary: string;
   evidence?: {
@@ -43,6 +101,12 @@ export type ConversationAnalysis = {
     goal_met: "yes" | "partial" | "no" | "unknown";
     key_quotes: string[];
   };
+  missed_or_weak_answers: Array<{
+    visitor_question: string;
+    assistant_response: string;
+    issue_type: "unanswered";
+    why_insufficient: string;
+  }>;
 };
 
 export type VisitorAnalysisRow = {
@@ -54,11 +118,16 @@ export type VisitorAnalysisRow = {
   prompt_version: string;
   satisfaction_1_to_10: number;
   sentiment: "satisfied" | "neutral" | "angry" | "unknown";
+  intent_primary?: ConversationAnalysis["intent_primary"] | null;
+  intents?: ConversationAnalysis["intents"] | null;
+  intent_other?: string | null;
   improvement: string;
   summary: string;
   evidence_visitor_goal?: string | null;
   evidence_goal_met?: "yes" | "partial" | "no" | "unknown" | null;
   evidence_key_quotes?: string[] | null;
+  missed_or_weak_answers?: ConversationAnalysis["missed_or_weak_answers"] | null;
+  page_type?: "corporate" | "residence" | "find_a_residence" | "unknown" | null;
   created_at: string;
 };
 
