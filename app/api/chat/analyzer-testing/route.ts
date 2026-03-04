@@ -10,6 +10,36 @@ type TranscriptItem = {
   content: string;
 };
 
+const INTENT_ENUM = [
+  "pricing_and_costs",
+  "waitlist_or_availability",
+  "tour_booking",
+  "finding_residence",
+  "living_and_care_options",
+  "assisted_living",
+  "independent_living",
+  "memory_care",
+  "respite_short_term",
+  "amenities_and_services",
+  "dining_nutrition",
+  "wellness_healthcare",
+  "activities_events",
+  "location_neighborhood",
+  "transportation",
+  "move_in_process",
+  "policies_and_rules",
+  "pet_policy",
+  "accessibility",
+  "caregiver_family_support",
+  "billing_payments",
+  "forms_documents",
+  "careers",
+  "corporate_information",
+  "contact_support",
+  "other",
+  "unknown",
+] as const;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -149,6 +179,18 @@ export async function POST(req: Request) {
               type: "string",
               enum: ["satisfied", "neutral", "angry", "unknown"],
             },
+            intent_primary: {
+              type: "string",
+              enum: INTENT_ENUM,
+            },
+            intents: {
+              type: "array",
+              items: {
+                type: "string",
+                enum: INTENT_ENUM,
+              },
+            },
+            intent_other: { type: "string" },
             improvement: { type: "string" },
             summary: { type: "string" },
             evidence: {
@@ -177,7 +219,7 @@ export async function POST(req: Request) {
                   assistant_response: { type: "string" },
                   issue_type: {
                     type: "string",
-                    enum: ["unanswered", "partial", "vague", "incorrect"],
+                    enum: ["unanswered"],
                   },
                   why_insufficient: { type: "string" },
                 },
@@ -193,6 +235,9 @@ export async function POST(req: Request) {
           required: [
             "satisfaction_1_to_10",
             "sentiment",
+            "intent_primary",
+            "intents",
+            "intent_other",
             "improvement",
             "summary",
             "evidence",

@@ -8,7 +8,7 @@ import { RefreshCcw } from "lucide-react";
 import { AnalyticsOverviewSection } from "../sections/AnalyticsOverviewSection";
 import { CommonWordsSection } from "../sections/CommonWordsSection";
 import { StopwordsSection } from "../sections/StopwordsSection";
-import { MonthlyInsightsSection } from "../sections/MonthlyInsightsSection";
+import { AnalyzerInsightsSection } from "../sections/AnalyzerInsightsSection";
 import { useProfileLevel } from "@/app/hooks/useProfileLevel";
 // import { AnalyticsFormsSection } from "../sections/AnalyticsFormsSection";
 import { type ChartItem } from "../sections/MiniBarChart";
@@ -449,7 +449,7 @@ export default function ChatAnalyticsOverviewPage() {
         durationBuckets={durationBucketQuery.data ?? null}
       />
 
-      <MonthlyInsightsSection isAdmin={isAdmin} />
+      <AnalyzerInsightsSection startDate={startDate} endDate={endDate} />
 
       <CommonWordsSection
         isAdmin={isAdmin}

@@ -13,13 +13,24 @@ Return JSON only with exactly these keys:
 {
   "satisfaction_1_to_10": number,
   "sentiment": "satisfied" | "neutral" | "angry" | "unknown",
+  "intent_primary": "pricing_and_costs" | "waitlist_or_availability" | "tour_booking" | "finding_residence" | "living_and_care_options" | "assisted_living" | "independent_living" | "memory_care" | "respite_short_term" | "amenities_and_services" | "dining_nutrition" | "wellness_healthcare" | "activities_events" | "location_neighborhood" | "transportation" | "move_in_process" | "policies_and_rules" | "pet_policy" | "accessibility" | "caregiver_family_support" | "billing_payments" | "forms_documents" | "careers" | "corporate_information" | "contact_support" | "other" | "unknown",
+  "intents": string[],
+  "intent_other": string,
   "improvement": string,
   "summary": string,
   "evidence": {
     "visitor_goal": string,
     "goal_met": "yes" | "partial" | "no" | "unknown",
     "key_quotes": string[]
-  }
+  },
+  "missed_or_weak_answers": [
+    {
+      "visitor_question": string,
+      "assistant_response": string,
+      "issue_type": "unanswered",
+      "why_insufficient": string
+    }
+  ]
  }
 
 Scoring rubric (be consistent):
@@ -40,6 +51,19 @@ Evidence rules:
 - goal_met: yes/partial/no/unknown based on transcript outcomes.
 - key_quotes: 1–3 short exact quotes (<= 20 words each) from the transcript that justify score/sentiment.
   If transcript is extremely short, provide an empty array.
+
+Intent rules:
+- intent_primary: choose exactly one from the list above.
+- intents: 0–3 items from the same list. Include intent_primary if it is not "unknown".
+- Use "other" only if none fit; then set intent_other to a short label (<= 4 words). Otherwise intent_other must be "".
+- If intent is unclear, set intent_primary to "unknown" and intents to [].
+
+Missed/weak answer rules:
+- missed_or_weak_answers: 0–3 items. Use exact wording from the transcript when possible.
+- visitor_question: the user's question or request.
+- assistant_response: the assistant reply tied to that question.
+- issue_type: must be "unanswered".
+- why_insufficient: one short sentence explaining the gap.
 
 Output rules:
 - JSON only. No markdown.
