@@ -8,6 +8,7 @@ import {
   MessageRow,
   SourceRow,
   ConversationAnalysis,
+  VisitorAnalysisRow,
 } from "@/app/types/types";
 import { useState } from "react";
 
@@ -27,7 +28,7 @@ interface ConversationProps {
   isBySession: boolean;
   compact?: boolean;
   isAdmin?: boolean;
-  analysis?: ConversationAnalysis | null;
+  analysis?: ConversationAnalysis | VisitorAnalysisRow | null;
   analysisLoading?: boolean;
   analysisError?: string | null;
   onAnalyze?: (visitorId: string) => Promise<ConversationAnalysis>;
