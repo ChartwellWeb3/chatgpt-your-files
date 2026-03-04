@@ -462,12 +462,13 @@ export async function POST(req: Request) {
     })
     .filter(
       (entry): entry is MissedAnswer =>
-        Boolean(entry) &&
-        Boolean(
-          entry.visitor_question ||
-            entry.assistant_response ||
-            entry.why_insufficient
-        )
+        entry
+          ? Boolean(
+              entry.visitor_question ||
+                entry.assistant_response ||
+                entry.why_insufficient
+            )
+          : false
     );
 
   const analysis = {
