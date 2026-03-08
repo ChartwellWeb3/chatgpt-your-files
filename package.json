@@ -4,7 +4,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "gen:types": "supabase gen types typescript --local > supabase/functions/_lib/database.ts"
+    "gen:types": "supabase gen types typescript --local > supabase/functions/_lib/database.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -40,14 +44,21 @@
     "typescript": "5.9.3"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "25.0.3",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
+    "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/ui": "^4.0.18",
     "baseline-browser-mapping": "^2.9.19",
     "encoding": "^0.1.13",
     "eslint": "^9",
     "eslint-config-next": "16.0.10",
-    "supabase": "^2.67.2"
+    "jsdom": "^28.1.0",
+    "supabase": "^2.67.2",
+    "vitest": "^4.0.18"
   },
   "overrides": {
     "@types/react": "19.2.7",
