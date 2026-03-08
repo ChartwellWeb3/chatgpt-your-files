@@ -119,3 +119,9 @@ npm run dev
 - `npm run build`: build the app.
 - `npm run start`: run the production server.
 - `npm run gen:types`: regenerate Supabase types in `supabase/functions/_lib/database.ts`.
+- `npm test`: run the full automated test suite once.
+- `npm run test:watch`: run tests in watch mode.
+- `npm run test:coverage`: run tests with a V8 coverage report (`coverage/index.html`).
+- 
+pm run test:ui: open Vitest interactive UI (default http://localhost:51204).
+
