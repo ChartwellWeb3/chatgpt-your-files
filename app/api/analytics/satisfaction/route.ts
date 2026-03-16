@@ -177,6 +177,12 @@ function normalizeGoalMet(value: unknown) {
 type IntentType = (typeof INTENT_ENUM)[number];
 const ISSUE_TYPE_ENUM = ["unanswered"] as const;
 type IssueType = (typeof ISSUE_TYPE_ENUM)[number];
+type MissedOrWeakAnswer = {
+  visitor_question: string;
+  assistant_response: string;
+  issue_type: IssueType;
+  why_insufficient: string;
+};
 
 function normalizeIntent(value: unknown): IntentType {
   const v = typeof value === "string" ? value.trim() : "";
@@ -445,7 +451,7 @@ export async function POST(req: Request) {
     ? parsed.missed_or_weak_answers
     : [];
   const missedOrWeak = rawMissed
-    .map((entry: unknown) => {
+    .map((entry: unknown): MissedOrWeakAnswer | null => {
       if (!isRecord(entry)) return null;
       return {
         visitor_question: asString(entry.visitor_question).trim(),
@@ -455,14 +461,13 @@ export async function POST(req: Request) {
       };
     })
     .filter(
-      (entry): entry is {
-        visitor_question: string;
-        assistant_response: string;
-        issue_type: IssueType;
-        why_insufficient: string;
-      } =>
+      (entry: MissedOrWeakAnswer | null): entry is MissedOrWeakAnswer =>
         !!entry &&
-        (entry.visitor_question || entry.assistant_response || entry.why_insufficient)
+        Boolean(
+          entry.visitor_question ||
+            entry.assistant_response ||
+            entry.why_insufficient,
+        )
     );
 
   const analysis = {

@@ -5,7 +5,6 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "jsdom",
-    environmentMatchGlobs: [["tests/api/**/*.test.ts", "node"]],
     setupFiles: ["./tests/setup.ts"],
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     exclude: ["node_modules", ".next", "supabase/functions"],
