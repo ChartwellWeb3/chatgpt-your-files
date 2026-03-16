@@ -109,7 +109,7 @@ export function AnalyzerInsightsSection({
           ? [intentPrimary]
           : [];
       const uniqueIntents = new Set(intents);
-      for (const intent of uniqueIntents) {
+      for (const intent of Array.from(uniqueIntents)) {
         intentCounts.set(intent, (intentCounts.get(intent) ?? 0) + 1);
       }
       const intentOther = toString(row.intent_other);
@@ -184,7 +184,7 @@ export function AnalyzerInsightsSection({
       const intentPrimary = toString(row.intent_primary);
       const intentList =
         intents.length > 0 ? intents : intentPrimary ? [intentPrimary] : [];
-      for (const intent of new Set(intentList)) {
+      for (const intent of Array.from(new Set(intentList))) {
         bucket.intents.set(intent, (bucket.intents.get(intent) ?? 0) + 1);
       }
       const missed = Array.isArray(row.missed_or_weak_answers)
