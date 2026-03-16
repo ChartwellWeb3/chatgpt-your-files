@@ -8,6 +8,10 @@ const PREFIXES: Record<string, AllowedPrefix> = {
     name: "Chatbot Content Management",
     path: "/chatbot-content-management",
   },
+  sitecoreResidenceSelectorApi: {
+    name: "Sitecore Residence Selector API",
+    path: "/api/sitecore/residence-selector",
+  },
   analytics: { name: "Chat Bot Analytics", path: "/chat-bot-analytics" },
   promptTesting: { name: "Prompt Testing", path: "/chatbot-prompt-testing" },
   tracker: { name: "User Data Tracker", path: "/user-data-tracker" },
@@ -17,7 +21,15 @@ const PREFIXES: Record<string, AllowedPrefix> = {
 
 const LEVEL_ALLOWED_KEYS: Record<Level, (keyof typeof PREFIXES)[]> = {
   3: ["home", "analytics", "tracker", "team"],
-  2: ["home", "content", "analytics", "promptTesting", "tracker", "team"],
+  2: [
+    "home",
+    "content",
+    "sitecoreResidenceSelectorApi",
+    "analytics",
+    "promptTesting",
+    "tracker",
+    "team",
+  ],
   1: ["home", "content", "analytics", "promptTesting", "tracker", "api", "team"],
 };
 
