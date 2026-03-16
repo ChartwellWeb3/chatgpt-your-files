@@ -88,6 +88,28 @@ type ReplaySectionProps = {
     | undefined;
 };
 
+function toConversationAnalysis(
+  analysis: VisitorAnalysisRow | null | undefined,
+): ConversationAnalysis | null {
+  if (!analysis) return null;
+
+  return {
+    satisfaction_1_to_10: analysis.satisfaction_1_to_10,
+    sentiment: analysis.sentiment,
+    intent_primary: analysis.intent_primary ?? "unknown",
+    intents: analysis.intents ?? [],
+    intent_other: analysis.intent_other ?? "",
+    improvement: analysis.improvement,
+    summary: analysis.summary,
+    evidence: {
+      visitor_goal: analysis.evidence_visitor_goal ?? "unknown",
+      goal_met: analysis.evidence_goal_met ?? "unknown",
+      key_quotes: analysis.evidence_key_quotes ?? [],
+    },
+    missed_or_weak_answers: analysis.missed_or_weak_answers ?? [],
+  };
+}
+
 export function AnalyticsReplaySection({
   isBySession,
   setModeBySession,
@@ -212,7 +234,9 @@ export function AnalyticsReplaySection({
             filteredSessions={filteredSessions}
             selectedVisitorId={selectedVisitorId}
             isAdmin={isAdmin}
-            analysis={analysisByVisitor.get(selectedVisitorId) ?? null}
+            analysis={toConversationAnalysis(
+              analysisByVisitor.get(selectedVisitorId),
+            )}
             analysisLoading={analysisLoadingVisitorId === selectedVisitorId}
             analysisError={
               analysisError?.visitorId === selectedVisitorId
