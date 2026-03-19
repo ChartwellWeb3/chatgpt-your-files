@@ -59,6 +59,22 @@ type Document = {
   is_common: boolean | null;
 };
 
+const importantRules = [
+  {
+    id: "residence-manager-phone-number",
+    title: "Replace all phone numbers with the chatbot number",
+    description:
+      "Whenever generating or preparing content for upload in the Residence Manager, every phone number must be replaced with the chatbot number below.",
+    chatbotNumber: "1-833-222-0039",
+    appliesTo: [
+      "Markdown (.md) files",
+      "Page content",
+      "Descriptions",
+      "Any embedded contact info",
+    ],
+  },
+];
+
 export default function DashboardPage() {
   const supabase = createClient();
   const queryClient = useQueryClient();
@@ -81,6 +97,7 @@ export default function DashboardPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
   const [isReembedding, setIsReembedding] = useState(false);
+  const [isImportantRulesOpen, setIsImportantRulesOpen] = useState(false);
 
   const sitecoreCopy = useMemo(
     () => ({
@@ -146,6 +163,19 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchResidenceSelector("fr");
   }, []);
+
+  useEffect(() => {
+    if (!isImportantRulesOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsImportantRulesOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isImportantRulesOpen]);
 
   console.log(sitecoreResidences);
 
@@ -581,6 +611,20 @@ export default function DashboardPage() {
     refetchDocuments();
   };
 
+  const renderImportantRulesButton = (className?: string) => (
+    <Button
+      variant="default"
+      size="sm"
+      onClick={() => setIsImportantRulesOpen(true)}
+      className={cn(
+        "gap-2 border border-amber-300 bg-amber-400 font-semibold text-amber-950 shadow-sm hover:bg-amber-300",
+        className,
+      )}
+    >
+      IMPORTANT RULES
+    </Button>
+  );
+
   return (
     <div className="flex h-full">
       {/* Sidebar - Residence List */}
@@ -784,15 +828,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant={activeTab === "files" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setActiveTab("files")}
-                    className="gap-2"
-                  >
-                    <FileText className="h-4 w-4" />
-                    Files
-                  </Button>
+                  {renderImportantRulesButton()}
                 </div>
               </div>
             </div>
@@ -967,6 +1003,9 @@ export default function DashboardPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="flex justify-center">
+                  {renderImportantRulesButton("w-full sm:w-auto")}
+                </div>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2">
                   <Select
                     value={sitecoreLanguage}
@@ -1027,6 +1066,102 @@ export default function DashboardPage() {
                 </Button>
               </CardFooter>
             </Card>
+          </div>
+        )}
+
+        {isImportantRulesOpen && (
+          <div
+            className="fixed inset-0 z-50 bg-background/80 p-4 backdrop-blur-sm"
+            onClick={() => setIsImportantRulesOpen(false)}
+            role="presentation"
+          >
+            <div className="flex min-h-full items-center justify-center">
+              <Card
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="important-rules-title"
+                className="w-full max-w-2xl border-border/60 shadow-2xl"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <CardHeader className="space-y-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-3">
+                      <Badge variant="outline" className="uppercase text-[10px]">
+                        Residence Manager
+                      </Badge>
+                      <div className="space-y-1">
+                        <CardTitle id="important-rules-title">
+                          IMPORTANT RULES
+                        </CardTitle>
+                        <CardDescription>
+                          Apply these rules whenever content is generated or
+                          prepared for upload on this page.
+                        </CardDescription>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setIsImportantRulesOpen(false)}
+                      className="h-8 w-8 p-0"
+                      aria-label="Close important rules"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {importantRules.map((rule, index) => (
+                    <div
+                      key={rule.id}
+                      className="rounded-lg border border-border/60 bg-muted/20 p-4"
+                    >
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-foreground">
+                            Rule {index + 1}
+                          </p>
+                          <h3 className="text-base font-semibold">
+                            {rule.title}
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            {rule.description}
+                          </p>
+                        </div>
+
+                        <div className="rounded-md border border-border/60 bg-background/80 p-4">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Chatbot number
+                          </p>
+                          <p className="mt-2 text-lg font-semibold tracking-tight">
+                            {rule.chatbotNumber}
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">
+                            This applies to:
+                          </p>
+                          <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                            {rule.appliesTo.map((item) => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+                <CardFooter className="justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsImportantRulesOpen(false)}
+                  >
+                    Close
+                  </Button>
+                </CardFooter>
+              </Card>
+            </div>
           </div>
         )}
       </div>
