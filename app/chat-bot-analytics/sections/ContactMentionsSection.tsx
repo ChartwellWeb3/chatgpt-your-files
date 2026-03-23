@@ -6,6 +6,13 @@ import { Card } from "@/components/ui/card";
 import { InfoDialog } from "./InfoDialog";
 import { createClient } from "@/app/utils/supabase/client";
 import { fmtDate } from "@/app/helpers/fmtDate";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type ContactMentionsSectionProps = {
   startDate: string;
@@ -31,13 +38,16 @@ export function ContactMentionsSection({
 }: ContactMentionsSectionProps) {
   const supabase = useMemo(() => createClient(), []);
   const [page, setPage] = useState(1);
+  const [pageTypeFilter, setPageTypeFilter] = useState<
+    "corporate" | "residence"
+  >("corporate");
 
   useEffect(() => {
     setPage(1);
-  }, [startDate, endDate]);
+  }, [startDate, endDate, pageTypeFilter]);
 
   const { data: rows = [], isLoading, error } = useQuery({
-    queryKey: ["analytics-contact-mentions", startDate, endDate],
+    queryKey: ["analytics-contact-mentions", startDate, endDate, pageTypeFilter],
     queryFn: async (): Promise<ContactMentionRow[]> => {
       const { data, error: fetchErr } = await supabase.rpc(
         "analytics_contact_mentions",
@@ -45,6 +55,7 @@ export function ContactMentionsSection({
           p_start: startDate || null,
           p_end: endDate || null,
           p_limit: MAX_ROWS,
+          p_page_type: pageTypeFilter,
         }
       );
       if (fetchErr) throw fetchErr;
@@ -87,9 +98,30 @@ export function ContactMentionsSection({
               </p>
             </InfoDialog>
           </div>
-          <div className="text-xs text-muted-foreground">
-            Range: {rangeLabel} • {rows.length} result
-            {rows.length !== 1 ? "s" : ""}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="text-xs text-muted-foreground">
+              Range: {rangeLabel} • {rows.length} result
+              {rows.length !== 1 ? "s" : ""}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Page type</span>
+              <Select
+                value={pageTypeFilter}
+                onValueChange={(value) =>
+                  setPageTypeFilter(
+                    value === "residence" ? "residence" : "corporate"
+                  )
+                }
+              >
+                <SelectTrigger className="h-8 w-[160px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="corporate">Corporate</SelectItem>
+                  <SelectItem value="residence">Residence</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
