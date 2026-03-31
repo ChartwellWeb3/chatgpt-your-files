@@ -14,6 +14,7 @@ import {
 import { MiniBarChart, type ChartItem } from "./MiniBarChart";
 import { DateRangePicker } from "./DateRangePicker";
 import { InfoDialog } from "./InfoDialog";
+import { getSentimentLabel } from "./sentiment";
 import { analyzerInstructions } from "@/lib/chatbot/analyzerPrompt";
 
 type OverviewCounts = {
@@ -641,7 +642,7 @@ export function AnalyticsOverviewSection({
           </Card>
           <Card className="p-4">
             <div className="text-xs text-muted-foreground">
-              Avg duration (Angry)
+              Avg duration ({getSentimentLabel("angry")})
             </div>
             <div className="text-2xl font-semibold text-red-400">
               {formatDuration(durationSentiment.angryAvgSeconds)}
@@ -672,8 +673,9 @@ export function AnalyticsOverviewSection({
                   <span className="font-medium text-foreground">
                     What it shows:
                   </span>{" "}
-                  Counts of satisfied, neutral, and angry users plus the average
-                  satisfaction score, using the latest analysis per user.
+                  Counts of satisfied, neutral, and not satisfied users plus
+                  the average satisfaction score, using the latest analysis per
+                  user.
                 </p>
                 <p>
                   <span className="font-medium text-foreground">
@@ -726,7 +728,9 @@ export function AnalyticsOverviewSection({
             </div>
           </Card>
           <Card className="p-4">
-            <div className="text-xs text-muted-foreground">Angry</div>
+            <div className="text-xs text-muted-foreground">
+              {getSentimentLabel("angry")}
+            </div>
             <div className="text-2xl font-semibold text-red-400">
               {ai.angry}
             </div>

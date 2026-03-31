@@ -34,6 +34,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { getSentimentLabel } from "./sentiment";
 
 type VisitorLite = { id: string; created_at: string };
 
@@ -158,7 +159,7 @@ export const VisitorsSessions = ({
     reviewed: "Reviewed",
     ai_satisfied: "AI satisfied",
     ai_neutral: "AI neutral",
-    ai_angry: "AI angry",
+    ai_angry: "AI not satisfied",
   };
   const formatDuration = (seconds?: number | null) => {
     if (!Number.isFinite(seconds) || !seconds || seconds <= 0) return "0s";
@@ -225,12 +226,12 @@ Scoring rubric (be consistent):
 - 7–8: Goal achieved but minor friction (extra steps, unclear phrasing, minor repetition).
 - 5–6: Partial help; visitor still missing something or outcome unclear.
 - 3–4: Mostly unhelpful; confusion, wrong direction, repeated failures.
-- 1–2: Very bad; visitor is clearly frustrated/angry, bot blocks, or fails completely.
+- 1–2: Very bad; visitor is clearly not satisfied or frustrated, bot blocks, or fails completely.
 
 Sentiment rules:
 - "satisfied": visitor expresses positive emotion OR goal clearly met with no frustration.
-- "angry": explicit frustration/negative tone OR repeated failure AND visitor escalates/complains.
-- "neutral": neither satisfied nor angry; or mixed tone with partial resolution.
+- "angry": use this value when the visitor is clearly not satisfied due to explicit frustration/negative tone OR repeated failure and escalation/complaints.
+- "neutral": neither satisfied nor clearly not satisfied; or mixed tone with partial resolution.
 - "unknown": transcript too short/ambiguous to infer tone or outcome.
 
 Evidence rules:
@@ -516,7 +517,7 @@ Output rules:
                     : "hover:bg-muted text-foreground",
                 ].join(" ")}
               >
-                AI angry
+                AI not satisfied
               </button>
             </div>
             {/* Dropdown */}
@@ -649,7 +650,7 @@ Output rules:
                     : null}
                   {analysis
                     ? pill(
-                        analysis.sentiment,
+                        getSentimentLabel(analysis.sentiment),
                         analysis.sentiment === "satisfied"
                           ? "ok"
                           : analysis.sentiment === "angry"

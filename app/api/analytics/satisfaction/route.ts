@@ -82,12 +82,12 @@ Scoring rubric (be consistent):
 - 7–8: Goal achieved but minor friction (extra steps, unclear phrasing, minor repetition).
 - 5–6: Partial help; visitor still missing something or outcome unclear.
 - 3–4: Mostly unhelpful; confusion, wrong direction, repeated failures.
-- 1–2: Very bad; visitor is clearly frustrated/angry, bot blocks, or fails completely.
+- 1–2: Very bad; visitor is clearly not satisfied or frustrated, bot blocks, or fails completely.
 
 Sentiment rules:
 - "satisfied": visitor expresses positive emotion OR goal clearly met with no frustration.
-- "angry": explicit frustration/negative tone OR repeated failure AND visitor escalates/complains.
-- "neutral": neither satisfied nor angry; or mixed tone with partial resolution.
+- "angry": use this value when the visitor is clearly not satisfied due to explicit frustration/negative tone OR repeated failure and escalation/complaints.
+- "neutral": neither satisfied nor clearly not satisfied; or mixed tone with partial resolution.
 - "unknown": transcript too short/ambiguous to infer tone or outcome.
 
 Evidence rules:
