@@ -10,6 +10,7 @@ import {
   ConversationAnalysis,
 } from "@/app/types/types";
 import { useState } from "react";
+import { getSentimentLabel } from "./sentiment";
 
 interface ConversationProps {
   selectedSessionId: string;
@@ -225,8 +226,8 @@ export const ConversationSection = ({
                     <div className="text-xs text-muted-foreground">
                       Sentiment
                     </div>
-                    <div className="mt-1 text-2xl font-semibold capitalize">
-                      {analysis.sentiment}
+                    <div className="mt-1 text-2xl font-semibold">
+                      {getSentimentLabel(analysis.sentiment)}
                     </div>
                   </div>
 
