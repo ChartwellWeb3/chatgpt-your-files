@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { InfoDialog } from "./InfoDialog";
+import { VisitorConversationModal } from "./VisitorConversationModal";
 import { createClient } from "@/app/utils/supabase/client";
 import { fmtDate } from "@/app/helpers/fmtDate";
 import {
@@ -58,6 +59,7 @@ export function ContactMentionsSection({
   const [pendingIds, setPendingIds] = useState<Set<number>>(new Set());
   const [resolveDialog, setResolveDialog] = useState<ResolveDialog | null>(null);
   const [resolving, setResolving] = useState(false);
+  const [conversationTarget, setConversationTarget] = useState<{ visitorId: string; sessionId: string } | null>(null);
 
   useEffect(() => {
     setPage(1);
@@ -266,7 +268,13 @@ export function ContactMentionsSection({
                         </Badge>
                       ) : null}
                       <span>{fmtDate(row.created_at)}</span>
-                      <span>Visitor: {row.visitor_id.slice(0, 8)}…</span>
+                      <button
+                        type="button"
+                        className="font-mono bg-muted px-1.5 py-0.5 rounded text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+                        onClick={() => setConversationTarget({ visitorId: row.visitor_id, sessionId: row.session_id })}
+                      >
+                        Visitor: {row.visitor_id.slice(0, 8)}…
+                      </button>
                       <span>Session: {row.session_id.slice(0, 8)}…</span>
                     </div>
 
@@ -338,6 +346,15 @@ export function ContactMentionsSection({
           ) : null}
         </Card>
       </section>
+
+      {/* Visitor conversation modal */}
+      {conversationTarget !== null ? (
+        <VisitorConversationModal
+          visitorId={conversationTarget.visitorId}
+          defaultSessionId={conversationTarget.sessionId}
+          onClose={() => setConversationTarget(null)}
+        />
+      ) : null}
 
       {/* Resolve modal */}
       {resolveDialog !== null ? (
