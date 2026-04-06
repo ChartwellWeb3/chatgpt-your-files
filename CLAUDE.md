@@ -144,16 +144,12 @@ Tests live in `tests/` mirroring the `app/` structure. Run with `npm test`.
 
 ## Analytics sections
 
-The analytics dashboard (`/chat-bot-analytics`) has these sections:
+The analytics dashboard (`/chat-bot-analytics`) is split into four pages:
 
-- **Overview** — visitor/session counts, form stats, corporate vs residence split, duration, AI sentiment summary
-- **Visitors/Sessions** — paginated list with conversation replay
-- **Analyzer Insights** — AI-driven satisfaction, sentiment, intents, evidence
-- **Common Words** — word frequency analysis
-- **Contact Mentions** — mentions of contact info in conversations
-- **Bot Booked Tours** — tour booking form analytics
-- **Forms** — form submission analytics
-- **Replay** — full conversation replay with source citations
+- **Overview** (`/overview`) — visitor/session counts, form stats, corporate vs residence split, duration, AI sentiment summary, month-over-month comparison chart
+- **Insights & Content** (`/insights`) — AI-driven satisfaction, sentiment, intents, evidence; contact mention review; common word frequency; stopword management (admin only)
+- **Visitors & Sessions** (`/visitors-sessions`) — paginated visitor list with filters, session list, conversation replay (by session or full), AI analysis per visitor, duration, review requests
+- **Reviews** (`/reviews`) — all review requests across visitors, with status tracking and conversation replay
 
 ## Conversation analysis schema
 
