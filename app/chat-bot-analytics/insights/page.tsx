@@ -8,6 +8,7 @@ import { RefreshCcw } from "lucide-react";
 import { AnalyzerInsightsSection } from "../sections/AnalyzerInsightsSection";
 import { ContactMentionsSection } from "../sections/ContactMentionsSection";
 import { CommonWordsSection } from "../sections/CommonWordsSection";
+import { SourcePerformanceSection } from "../sections/SourcePerformanceSection";
 import { StopwordsSection } from "../sections/StopwordsSection";
 import { DateRangePicker } from "../sections/DateRangePicker";
 import { useProfileLevel } from "@/app/hooks/useProfileLevel";
@@ -143,6 +144,8 @@ export default function ChatAnalyticsInsightsPage() {
           />
         </div>
       </div>
+
+      <SourcePerformanceSection />
 
       <AnalyzerInsightsSection startDate={startDate} endDate={endDate} />
 

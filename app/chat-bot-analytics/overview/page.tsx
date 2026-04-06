@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { RefreshCcw } from "lucide-react";
 import { AnalyticsOverviewSection } from "../sections/AnalyticsOverviewSection";
 import { BookerProfileSection } from "../sections/BookerProfileSection";
+import { DateRangePicker } from "../sections/DateRangePicker";
+import { LangComparisonSection } from "../sections/LangComparisonSection";
 import { MonthlyComparisonSection } from "../sections/MonthlyComparisonSection";
 import { type ChartItem } from "../sections/MiniBarChart";
 
@@ -230,6 +232,16 @@ export default function ChatAnalyticsOverviewPage() {
         </div>
 
         <div className="flex items-end gap-2 flex-wrap">
+          <div className="w-[260px]">
+            <DateRangePicker
+              startDate={startDate}
+              endDate={endDate}
+              onChange={(from, to) => {
+                setStartDate(from);
+                setEndDate(to);
+              }}
+            />
+          </div>
           <Button variant="outline" className="gap-2" onClick={refreshAll}>
             <RefreshCcw className="h-4 w-4" />
             Refresh
@@ -240,8 +252,6 @@ export default function ChatAnalyticsOverviewPage() {
       <AnalyticsOverviewSection
         startDate={startDate}
         endDate={endDate}
-        setStartDate={setStartDate}
-        setEndDate={setEndDate}
         overviewCounts={overviewSummary}
         formCompletionPct={formCompletionPct}
         corporateSessions={overviewSummary.corporateSessions}
@@ -262,9 +272,19 @@ export default function ChatAnalyticsOverviewPage() {
         durationBuckets={durationBucketQuery.data ?? null}
       />
 
+      <BookerProfileSection startDate={startDate} endDate={endDate} />
+
+      <LangComparisonSection startDate={startDate} endDate={endDate} />
+
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="flex-1 border-t" />
+        <span>Month-over-month comparison — independent date controls</span>
+        <div className="flex-1 border-t" />
+      </div>
+
       <MonthlyComparisonSection />
 
-      <BookerProfileSection startDate={startDate} endDate={endDate} />
+
     </div>
   );
 }

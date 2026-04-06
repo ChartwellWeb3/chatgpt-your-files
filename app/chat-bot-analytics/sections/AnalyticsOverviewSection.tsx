@@ -12,7 +12,6 @@ import {
   type PieLabelRenderProps,
 } from "recharts";
 import { MiniBarChart, type ChartItem } from "./MiniBarChart";
-import { DateRangePicker } from "./DateRangePicker";
 import { InfoDialog } from "./InfoDialog";
 import { getSentimentLabel } from "./sentiment";
 import { analyzerInstructions } from "@/lib/chatbot/analyzerPrompt";
@@ -28,8 +27,6 @@ type OverviewCounts = {
 type OverviewProps = {
   startDate: string;
   endDate: string;
-  setStartDate: (date: string) => void;
-  setEndDate: (date: string) => void;
   overviewCounts: OverviewCounts;
   formCompletionPct: number;
   corporateSessions: number;
@@ -72,8 +69,6 @@ type OverviewProps = {
 export function AnalyticsOverviewSection({
   startDate,
   endDate,
-  setStartDate,
-  setEndDate,
   overviewCounts,
   formCompletionPct,
   corporateSessions,
@@ -345,16 +340,6 @@ export function AnalyticsOverviewSection({
               range.
             </p>
           </InfoDialog>
-        </div>
-        <div className="w-[260px]">
-          <DateRangePicker
-            startDate={startDate}
-            endDate={endDate}
-            onChange={(from, to) => {
-              setStartDate(from);
-              setEndDate(to);
-            }}
-          />
         </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
