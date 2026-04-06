@@ -1,23 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { createClient } from "../../utils/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { RefreshCcw } from "lucide-react";
 import { AnalyticsOverviewSection } from "../sections/AnalyticsOverviewSection";
-import { CommonWordsSection } from "../sections/CommonWordsSection";
-import { StopwordsSection } from "../sections/StopwordsSection";
-import { AnalyzerInsightsSection } from "../sections/AnalyzerInsightsSection";
-import { ContactMentionsSection } from "../sections/ContactMentionsSection";
-import { useProfileLevel } from "@/app/hooks/useProfileLevel";
-// import { AnalyticsFormsSection } from "../sections/AnalyticsFormsSection";
+import { MonthlyComparisonSection } from "../sections/MonthlyComparisonSection";
 import { type ChartItem } from "../sections/MiniBarChart";
 
 type OverviewCounts = {
   visitors: number;
   sessions: number;
-  // messages: number;
   totalForms: number;
   submittedForms: number;
 };
@@ -66,34 +60,18 @@ type DurationBucketSummary = {
   angry: Record<string, DurationBucket>;
 };
 
-type CommonWordRow = {
-  word: string;
-  freq: number;
-  lang: string;
-};
-
-type StopwordRow = {
-  id: number;
-  word: string;
-  lang: "en" | "fr";
-};
-
 const EMPTY_OVERVIEW: OverviewCounts = {
   visitors: 0,
   sessions: 0,
-  // messages: 0,
   totalForms: 0,
   submittedForms: 0,
 };
 
 export default function ChatAnalyticsOverviewPage() {
   const supabase = createClient();
-  const { isAdmin } = useProfileLevel();
 
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
-  // const [bookedStart, setBookedStart] = useState<string>("");
-  // const [bookedEnd, setBookedEnd] = useState<string>("");
 
   const overviewSummaryQuery = useQuery({
     queryKey: ["analytics-overview-summary", startDate, endDate],
@@ -121,20 +99,6 @@ export default function ChatAnalyticsOverviewPage() {
         multiMessageVisitors: summary.multiMessageVisitors ?? 0,
         multiSessionMessageVisitors: summary.multiSessionMessageVisitors ?? 0,
       };
-    },
-  });
-
-  const commonWordsQuery = useQuery({
-    queryKey: ["analytics-common-words"],
-    queryFn: async (): Promise<CommonWordRow[]> => {
-      const { data, error } = await supabase
-        .from("chat_common_words")
-        .select("word,freq,lang")
-        .in("lang", ["en", "fr"])
-        .order("freq", { ascending: false });
-
-      if (error) throw error;
-      return (data ?? []) as CommonWordRow[];
     },
   });
 
@@ -215,42 +179,15 @@ export default function ChatAnalyticsOverviewPage() {
     },
   });
 
-  const stopwordsQuery = useQuery({
-    queryKey: ["analytics-stopwords"],
-    queryFn: async (): Promise<StopwordRow[]> => {
-      const { data, error } = await supabase
-        .from("chat_stopwords")
-        .select("id,word,lang")
-        .in("lang", ["en", "fr"])
-        .order("word", { ascending: true });
-
-      if (error) throw error;
-      return (data ?? []) as StopwordRow[];
-    },
-    enabled: isAdmin,
-  });
-
-  // const bookedToursByDateQuery = useQuery({
-  //   queryKey: ["booked-tours-by-date", bookedStart, bookedEnd],
-  //   queryFn: async (): Promise<VisitorFormRow[]> => {
-  //     let query = supabase
-  //       .from("visitor_forms")
-  //       .select("is_submitted,submitted_with_button,submitted_at")
-  //       .eq("form_type", "chat_bot_book_a_tour")
-  //       .eq("is_submitted", true);
-
-  //     if (bookedStart) {
-  //       query = query.gte("submitted_at", bookedStart);
-  //     }
-  //     if (bookedEnd) {
-  //       query = query.lte("submitted_at", `${bookedEnd} 23:59:59`);
-  //     }
-
-  //     const { data, error } = await query;
-  //     if (error) throw error;
-  //     return (data ?? []) as VisitorFormRow[];
-  //   },
-  // });
+  const refreshAll = async () => {
+    await Promise.all([
+      overviewSummaryQuery.refetch(),
+      aiSummaryQuery.refetch(),
+      durationSummaryQuery.refetch(),
+      durationBySentimentQuery.refetch(),
+      durationBucketQuery.refetch(),
+    ]);
+  };
 
   const overviewSummary = overviewSummaryQuery.data ?? {
     ...EMPTY_OVERVIEW,
@@ -284,138 +221,13 @@ export default function ChatAnalyticsOverviewPage() {
       ? (overviewSummary.submittedForms / overviewSummary.visitors) * 100
       : 0;
 
-  // const bookTourRows = bookTourFormsQuery.data ?? [];
-  // // const bookTourTotals = useMemo(() => {
-  // //   const totalSubmitted = bookTourRows.length;
-  // //   const dynamicSubmitted = bookTourRows.filter(
-  // //     (r) => r.submitted_with_button === "dynamic"
-  // //   ).length;
-
-  // //   return { totalSubmitted, dynamicSubmitted };
-  // // }, [bookTourRows]);
-
-  // const bookedByDateStats = useMemo(() => {
-  //   const rows = bookedToursByDateQuery.data ?? [];
-
-  //   let total = 0;
-  //   let dynamic = 0;
-
-  //   for (const r of rows) {
-  //     total++;
-  //     if (r.submitted_with_button === "dynamic") dynamic++;
-  //   }
-
-  //   return { total, dynamic };
-  // }, [bookedToursByDateQuery.data]);
-
-  const refreshAll = async () => {
-    await Promise.all([
-      overviewSummaryQuery.refetch(),
-      commonWordsQuery.refetch(),
-      stopwordsQuery.refetch(),
-      aiSummaryQuery.refetch(),
-      durationSummaryQuery.refetch(),
-      durationBySentimentQuery.refetch(),
-      durationBucketQuery.refetch(),
-      // bookedToursByDateQuery.refetch(),
-    ]);
-  };
-
-  const [refreshingWords, setRefreshingWords] = useState(false);
-  const [refreshWordsError, setRefreshWordsError] = useState<string | null>(
-    null,
-  );
-
-  const refreshCommonWords = async () => {
-    setRefreshingWords(true);
-    setRefreshWordsError(null);
-    try {
-      const res = await fetch("/api/analytics/refresh-common-words", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      const data = await res.json();
-      if (!res.ok || !data?.ok) {
-        throw new Error(data?.error || "Refresh failed");
-      }
-      await commonWordsQuery.refetch();
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Refresh failed";
-      setRefreshWordsError(message);
-    } finally {
-      setRefreshingWords(false);
-    }
-  };
-
-  const commonWords = commonWordsQuery.data ?? [];
-  const enWords = useMemo(
-    () =>
-      commonWords
-        .filter((row) => row.lang === "en")
-        .sort((a, b) => b.freq - a.freq)
-        .slice(0, 50),
-    [commonWords],
-  );
-  const frWords = useMemo(
-    () =>
-      commonWords
-        .filter((row) => row.lang === "fr")
-        .sort((a, b) => b.freq - a.freq)
-        .slice(0, 50),
-    [commonWords],
-  );
-
-  const stopwords = stopwordsQuery.data ?? [];
-  const stopwordsEn = useMemo(
-    () => stopwords.filter((row) => row.lang === "en"),
-    [stopwords],
-  );
-  const stopwordsFr = useMemo(
-    () => stopwords.filter((row) => row.lang === "fr"),
-    [stopwords],
-  );
-  const stopwordSet = useMemo(() => {
-    return new Set(stopwords.map((row) => `${row.lang}:${row.word}`));
-  }, [stopwords]);
-
-  const [stopwordError, setStopwordError] = useState<string | null>(null);
-
-  const addStopword = async (word: string, lang: "en" | "fr") => {
-    setStopwordError(null);
-    const { error } = await supabase
-      .from("chat_stopwords")
-      .insert({ word, lang });
-
-    if (error) {
-      setStopwordError(error.message);
-      throw error;
-    }
-    await stopwordsQuery.refetch();
-    await refreshCommonWords();
-  };
-
-  const deleteStopword = async (id: number) => {
-    setStopwordError(null);
-    const { error } = await supabase
-      .from("chat_stopwords")
-      .delete()
-      .eq("id", id);
-
-    if (error) {
-      setStopwordError(error.message);
-      throw error;
-    }
-    await stopwordsQuery.refetch();
-  };
-
   return (
     <div className="p-6 space-y-8">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold">Chat Analytics</h1>
+          <h1 className="text-2xl font-semibold">Overview</h1>
           <p className="text-sm text-muted-foreground">
-            Track visitor behavior, sessions, and bot performance.
+            Key metrics, engagement stats, and month-over-month trends.
           </p>
         </div>
 
@@ -450,45 +262,7 @@ export default function ChatAnalyticsOverviewPage() {
         durationBuckets={durationBucketQuery.data ?? null}
       />
 
-      <AnalyzerInsightsSection startDate={startDate} endDate={endDate} />
-
-      <ContactMentionsSection startDate={startDate} endDate={endDate} />
-
-      <CommonWordsSection
-        isAdmin={isAdmin}
-        refreshCommonWords={refreshCommonWords}
-        refreshingWords={refreshingWords}
-        loading={commonWordsQuery.isLoading}
-        enWords={enWords}
-        frWords={frWords}
-        onAddStopword={addStopword}
-        stopwordSet={stopwordSet}
-      />
-      {refreshWordsError ? (
-        <div className="text-sm text-destructive">{refreshWordsError}</div>
-      ) : null}
-
-      {isAdmin ? (
-        <StopwordsSection
-          loading={stopwordsQuery.isLoading}
-          error={stopwordError}
-          enWords={stopwordsEn}
-          frWords={stopwordsFr}
-          onAdd={addStopword}
-          onDelete={deleteStopword}
-        />
-      ) : null}
-
-      {/* <AnalyticsFormsSection
-        loadingBookTourForms={bookTourFormsQuery.isLoading}
-        loadingBookedByDate={bookedToursByDateQuery.isLoading}
-        bookTourTotals={bookTourTotals}
-        bookedByDateStats={bookedByDateStats}
-        bookedStart={bookedStart}
-        bookedEnd={bookedEnd}
-        setBookedStart={setBookedStart}
-        setBookedEnd={setBookedEnd}
-      /> */}
+      <MonthlyComparisonSection />
     </div>
   );
 }
