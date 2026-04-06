@@ -1,21 +1,12 @@
 "use client";
-import { modelData, type ModelDataResult } from "./helpers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
 import { toast } from "@/components/ui/use-toast";
 
 import { createClient } from "../utils/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChatBotDownloadResDataSection } from "./sections/ChatBotDownloadResDataSection";
 import {
   Building2,
   FileText,
@@ -42,7 +33,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import Link from "next/link";
 
 type Residence = {
   id: number;
@@ -88,10 +78,6 @@ export default function DashboardPage() {
   const [editedName, setEditedName] = useState("");
   const [editedCustomId, setEditedCustomId] = useState("");
   const [activeTab, setActiveTab] = useState<"files" | "chat">("files");
-  const [sitecoreLanguage, setSitecoreLanguage] = useState<"en" | "fr">("fr");
-  const [isFetchingSitecore, setIsFetchingSitecore] = useState(false);
-  const [sitecoreResidences, setSitecoreResidences] =
-    useState<ModelDataResult | null>(null);
   // const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -99,70 +85,6 @@ export default function DashboardPage() {
   const [isReembedding, setIsReembedding] = useState(false);
   const [isImportantRulesOpen, setIsImportantRulesOpen] = useState(false);
 
-  const sitecoreCopy = useMemo(
-    () => ({
-      en: {
-        title: "Sitecore Residence Data",
-        prodBadge: "Prod Sitecore",
-        description:
-          "This connects to production Sitecore. Use it to generate the latest residences markdown files.",
-        languagePlaceholder: "Language",
-        loadButton: "Load Sitecore",
-        loadingButton: "Loading Sitecore",
-        workflowTitle: "Update workflow",
-        workflowSteps: [
-          "When pricing changes or residences are added/removed, download the file.",
-          "Update `corporateen` or `corporatefr` based on the selected language.",
-          "Remove the old file before uploading the new one.",
-        ],
-      },
-      fr: {
-        title: "Sitecore Residence Data",
-        prodBadge: "Prod Sitecore",
-        description:
-          "This connects to production Sitecore. Use it to generate the latest residences markdown files.",
-        languagePlaceholder: "Language",
-        loadButton: "Load Sitecore",
-        loadingButton: "Loading Sitecore",
-        workflowTitle: "Update workflow",
-        workflowSteps: [
-          "When pricing changes or residences are added/removed, download the file.",
-          "Update `corporateen` or `corporatefr` based on the selected language.",
-          "Remove the old file before uploading the new one.",
-        ],
-      },
-    }),
-    [],
-  );
-  const activeSitecoreCopy = sitecoreCopy[sitecoreLanguage];
-
-  const fetchResidenceSelector = async (language: "en" | "fr") => {
-    setIsFetchingSitecore(true);
-    try {
-      const response = await fetch(
-        `/api/sitecore/residence-selector?language=${language}`,
-        {
-          method: "GET",
-        },
-      );
-      const data = await response.json();
-      // console.log("[chatbot-content-management] residence-selector:", data);
-      const res = modelData(data.payload.data, language);
-
-      setSitecoreResidences(res);
-    } catch (error) {
-      console.error(
-        "[chatbot-content-management] residence-selector request failed:",
-        error,
-      );
-    } finally {
-      setIsFetchingSitecore(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchResidenceSelector("fr");
-  }, []);
 
   useEffect(() => {
     if (!isImportantRulesOpen) return;
@@ -176,8 +98,6 @@ export default function DashboardPage() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isImportantRulesOpen]);
-
-  console.log(sitecoreResidences);
 
   // ✅ FIXED: useQuery v5 Syntax
   const { data: residences, isLoading: loadingResidences } = useQuery({
@@ -990,81 +910,11 @@ export default function DashboardPage() {
                 <div className="w-14 h-14 bg-muted/30 rounded-full flex items-center justify-center mx-auto">
                   <Building2 className="h-7 w-7 text-muted-foreground" />
                 </div>
-                <div className="flex items-center justify-center gap-2">
-                  <CardTitle className="text-xl">
-                    {activeSitecoreCopy.title}
-                  </CardTitle>
-                  <Badge variant="outline" className="uppercase text-[10px]">
-                    {activeSitecoreCopy.prodBadge}
-                  </Badge>
-                </div>
-                <CardDescription>
-                  {activeSitecoreCopy.description}
-                </CardDescription>
+                <CardTitle className="text-xl">Residence Manager</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-center">
-                  {renderImportantRulesButton("w-full sm:w-auto")}
-                </div>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2">
-                  <Select
-                    value={sitecoreLanguage}
-                    onValueChange={(value) =>
-                      setSitecoreLanguage(value as "en" | "fr")
-                    }
-                  >
-                    <SelectTrigger className="w-full sm:w-[130px] bg-background/40">
-                      <SelectValue
-                        placeholder={activeSitecoreCopy.languagePlaceholder}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="en">EN</SelectItem>
-                      <SelectItem value="fr">FR</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => fetchResidenceSelector(sitecoreLanguage)}
-                    className="gap-2"
-                    disabled={isFetchingSitecore}
-                  >
-                    {isFetchingSitecore ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        {activeSitecoreCopy.loadingButton}
-                      </>
-                    ) : (
-                      activeSitecoreCopy.loadButton
-                    )}
-                  </Button>
-                </div>
-                <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-left text-sm">
-                  <p className="font-medium text-foreground/80">
-                    {activeSitecoreCopy.workflowTitle}
-                  </p>
-                  <ul className="mt-2 list-disc pl-4 text-muted-foreground">
-                    {activeSitecoreCopy.workflowSteps.map((step) => (
-                      <li key={step}>{step}</li>
-                    ))}
-                  </ul>
-                </div>
-                <ChatBotDownloadResDataSection
-                  residences={sitecoreResidences}
-                  language={sitecoreLanguage}
-                />
+              <CardContent className="flex justify-center">
+                {renderImportantRulesButton("w-full sm:w-auto")}
               </CardContent>
-              <CardFooter className="text-center flex items-center justify-center">
-                <Button className=" ">
-                  <Link
-                    target="_blank"
-                    href="https://dev.azure.com/chartwell/XM/_wiki/wikis/XM.wiki/338/Chatbot-Residence-Content-Manager"
-                  >
-                    Documentation
-                  </Link>
-                </Button>
-              </CardFooter>
             </Card>
           </div>
         )}

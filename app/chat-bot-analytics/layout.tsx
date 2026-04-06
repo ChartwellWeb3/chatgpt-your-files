@@ -1,5 +1,5 @@
 import type { PropsWithChildren } from "react";
-import { BarChart3, Star, Users } from "lucide-react";
+import { BarChart3, BrainCircuit, Star, Users } from "lucide-react";
 import { AnalyticsSubnav } from "./sections/AnalyticsSubnav";
 
 const NAV_LINKS = [
@@ -7,6 +7,11 @@ const NAV_LINKS = [
     href: "/chat-bot-analytics/overview",
     label: "Overview",
     icon: <BarChart3 className="h-4 w-4" />,
+  },
+  {
+    href: "/chat-bot-analytics/insights",
+    label: "Insights & Content",
+    icon: <BrainCircuit className="h-4 w-4" />,
   },
   {
     href: "/chat-bot-analytics/visitors-sessions",
