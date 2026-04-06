@@ -153,7 +153,7 @@ Tests live in `tests/` mirroring the `app/` structure. Run with `npm test`.
 The analytics dashboard (`/chat-bot-analytics`) is split into four pages:
 
 - **Overview** (`/overview`) — visitor/session counts, form stats, corporate vs residence split, duration, AI sentiment summary, booker conversion profile, language comparison; month-over-month comparison at the bottom with its own independent date controls
-- **Insights & Content** (`/insights`) — document & source performance (all-time, first section); AI-driven satisfaction, sentiment, intents, evidence; contact mention review; common word frequency; stopword management (admin only)
+- **Insights & Content** (`/insights`) — AI-driven satisfaction, sentiment, intents, evidence; contact mention review; common word frequency; stopword management (admin only)
 - **Visitors & Sessions** (`/visitors-sessions`) — paginated visitor list with filters, session list, conversation replay (by session or full), AI analysis per visitor, duration, review requests
 - **Reviews** (`/reviews`) — all review requests across visitors, with status tracking and conversation replay
 
@@ -170,7 +170,6 @@ The analytics dashboard (`/chat-bot-analytics`) is split into four pages:
 | `analytics_booker_profile` | Overview | Intent, sentiment, satisfaction, and language breakdown for visitors who submitted a `chat_bot_book_a_tour` form |
 | `analytics_lang_comparison` | Overview | Visitors, sessions, satisfaction, sentiment, and tour-booking conversions split by language |
 | `analytics_contact_mentions` | Insights | Assistant messages containing phone/contact info, with preceding user question |
-| `analytics_source_performance` | Insights | Citation counts per document and section from `chat_message_sources`; dead-document list (zero citations all-time) |
 
 ### Overview page date range
 
@@ -188,16 +187,6 @@ Returns: `total_bookers`, `avg_satisfaction_bookers`, `avg_satisfaction_all`, `s
 ### Language comparison
 
 `analytics_lang_comparison(p_start, p_end)` assigns each visitor their primary language (most-used session `lang` in the period), then returns per-language: `visitor_count`, `session_count`, `analyzed_count`, `avg_satisfaction`, `satisfied`/`neutral`/`angry` counts, `form_submissions`. Uses latest `chat_visitor_analyses` per visitor with no date restriction (same pattern as booker profile). EN and FR are always shown first in the UI.
-
-### Document & source performance
-
-`analytics_source_performance(p_start, p_end, p_limit)` is always called with `p_start = null, p_end = null` (all-time — the section has no date filter). Returns:
-- `top_documents` — documents ranked by total citations aggregated from all their sections
-- `top_sections` — individual sections ranked by citation count with content preview (shown via toggle)
-- `dead_documents` — documents with zero citations ever (actionable dead content list)
-- `total_citations`, `total_cited_sections`, `total_documents`, `dead_document_count`
-
-`SourcePerformanceSection` accepts no date props. It is the first section on the Insights & Content page.
 
 ## Conversation analysis schema
 
