@@ -27,15 +27,8 @@ type SentimentSplit = {
 type LangSplit = {
   en: number;
   fr: number;
-  other: number;
 };
 
-type PageTypeSplit = {
-  corporate: number;
-  residence: number;
-  find_a_residence: number;
-  unknown: number;
-};
 
 type BookerProfile = {
   total_bookers: number;
@@ -44,7 +37,7 @@ type BookerProfile = {
   sentiment: SentimentSplit;
   top_intents: IntentRow[];
   lang_split: LangSplit;
-  page_type_split: PageTypeSplit;
+
 };
 
 const EMPTY_PROFILE: BookerProfile = {
@@ -53,8 +46,8 @@ const EMPTY_PROFILE: BookerProfile = {
   avg_satisfaction_all: 0,
   sentiment: { satisfied: 0, neutral: 0, angry: 0, unknown: 0 },
   top_intents: [],
-  lang_split: { en: 0, fr: 0, other: 0 },
-  page_type_split: { corporate: 0, residence: 0, find_a_residence: 0, unknown: 0 },
+  lang_split: { en: 0, fr: 0 },
+
 };
 
 function sentimentColor(key: "satisfied" | "neutral" | "angry" | "unknown") {
@@ -123,7 +116,7 @@ export function BookerProfileSection({ startDate, endDate }: BookerProfileSectio
   const p = profile ?? EMPTY_PROFILE;
   const sentimentTotal =
     p.sentiment.satisfied + p.sentiment.neutral + p.sentiment.angry + p.sentiment.unknown;
-  const langTotal = p.lang_split.en + p.lang_split.fr + p.lang_split.other;
+  const langTotal = p.lang_split.en + p.lang_split.fr;
 
   const scoreDelta =
     p.avg_satisfaction_all > 0
@@ -256,48 +249,25 @@ export function BookerProfileSection({ startDate, endDate }: BookerProfileSectio
               </Card>
             </div>
 
-            {/* Lang + page type */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Card className="p-4 space-y-2">
-                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Language
-                </div>
-                <div className="flex flex-wrap gap-3 text-sm">
-                  {(["en", "fr", "other"] as const).map((k) => (
-                    <div key={k} className="flex items-center gap-1.5">
-                      <span className="font-medium uppercase text-xs">{k}</span>
-                      <span className="text-muted-foreground">
-                        {p.lang_split[k]}
-                        {langTotal > 0
-                          ? ` (${Math.round((p.lang_split[k] / langTotal) * 100)}%)`
-                          : ""}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-
-              <Card className="p-4 space-y-2">
-                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Page type
-                </div>
-                <div className="flex flex-wrap gap-3 text-sm">
-                  {(
-                    [
-                      { key: "corporate", label: "Corporate" },
-                      { key: "residence", label: "Residence" },
-                      { key: "find_a_residence", label: "Find a Residence" },
-                      { key: "unknown", label: "Unknown" },
-                    ] as const
-                  ).map(({ key, label }) => (
-                    <div key={key} className="flex items-center gap-1.5">
-                      <span className="font-medium text-xs">{label}</span>
-                      <span className="text-muted-foreground">{p.page_type_split[key]}</span>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
+            {/* Language */}
+            <Card className="p-4 space-y-2">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Language
+              </div>
+              <div className="flex flex-wrap gap-3 text-sm">
+                {(["en", "fr"] as const).map((k) => (
+                  <div key={k} className="flex items-center gap-1.5">
+                    <span className="font-medium uppercase text-xs">{k}</span>
+                    <span className="text-muted-foreground">
+                      {p.lang_split[k]}
+                      {langTotal > 0
+                        ? ` (${Math.round((p.lang_split[k] / langTotal) * 100)}%)`
+                        : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
           </div>
         ) : null}
       </Card>
