@@ -133,6 +133,12 @@ SITECORE_RESIDENCE_DATASOURCE=# Sitecore datasource path
 - Used in `/chatbot-content-management` to pull and download province `.md` files.
 - After downloading, upload the file to the correct residence bucket to trigger re-indexing.
 
+## Migration discipline
+
+- **Never edit a migration that has already been applied** (`supabase db push` or applied via dashboard). Once pushed, a migration file is immutable history.
+- To change an already-applied function or schema, create a new timestamped migration (`YYYYMMDDHHMMSS_description.sql`) using `create or replace function` or `alter table`.
+- Migration filenames follow the pattern: `20260406130000_add_analytics_booker_profile.sql`.
+
 ## Testing
 
 Tests live in `tests/` mirroring the `app/` structure. Run with `npm test`.
@@ -144,16 +150,54 @@ Tests live in `tests/` mirroring the `app/` structure. Run with `npm test`.
 
 ## Analytics sections
 
-The analytics dashboard (`/chat-bot-analytics`) has these sections:
+The analytics dashboard (`/chat-bot-analytics`) is split into four pages:
 
-- **Overview** — visitor/session counts, form stats, corporate vs residence split, duration, AI sentiment summary
-- **Visitors/Sessions** — paginated list with conversation replay
-- **Analyzer Insights** — AI-driven satisfaction, sentiment, intents, evidence
-- **Common Words** — word frequency analysis
-- **Contact Mentions** — mentions of contact info in conversations
-- **Bot Booked Tours** — tour booking form analytics
-- **Forms** — form submission analytics
-- **Replay** — full conversation replay with source citations
+- **Overview** (`/overview`) — visitor/session counts, form stats, corporate vs residence split, duration, AI sentiment summary, booker conversion profile, language comparison; month-over-month comparison at the bottom with its own independent date controls
+- **Insights & Content** (`/insights`) — document & source performance (all-time, first section); AI-driven satisfaction, sentiment, intents, evidence; contact mention review; common word frequency; stopword management (admin only)
+- **Visitors & Sessions** (`/visitors-sessions`) — paginated visitor list with filters, session list, conversation replay (by session or full), AI analysis per visitor, duration, review requests
+- **Reviews** (`/reviews`) — all review requests across visitors, with status tracking and conversation replay
+
+### Key analytics SQL functions
+
+| Function | Page | Purpose |
+|----------|------|---------|
+| `analytics_overview_summary` | Overview | Visitor/session/form counts, top pages/residences/langs, corporate vs residence split |
+| `analytics_ai_summary` | Overview | Sentiment counts and avg satisfaction score for all analyzed visitors |
+| `analytics_duration_summary` | Overview | Avg conversation duration across all visitors |
+| `analytics_duration_by_sentiment` | Overview | Avg duration broken out by sentiment bucket |
+| `analytics_duration_bucket_summary` | Overview | Duration distribution (short/medium/long) overall and per sentiment |
+| `analytics_monthly_comparison` | Overview | Side-by-side metric comparison for two calendar months (independent date controls, not tied to the page date range) |
+| `analytics_booker_profile` | Overview | Intent, sentiment, satisfaction, and language breakdown for visitors who submitted a `chat_bot_book_a_tour` form |
+| `analytics_lang_comparison` | Overview | Visitors, sessions, satisfaction, sentiment, and tour-booking conversions split by language |
+| `analytics_contact_mentions` | Insights | Assistant messages containing phone/contact info, with preceding user question |
+| `analytics_source_performance` | Insights | Citation counts per document and section from `chat_message_sources`; dead-document list (zero citations all-time) |
+
+### Overview page date range
+
+The date picker lives in the page header and applies to all sections **except** `MonthlyComparisonSection`, which has its own independent month selectors. `MonthlyComparisonSection` is rendered last with a labeled divider to make this separation clear.
+
+### Booker conversion profile
+
+`analytics_booker_profile(p_start, p_end)` joins three tables on `visitor_id`:
+- `visitor_forms` — filters `is_submitted = true AND form_type = 'chat_bot_book_a_tour'` within the period
+- `chat_visitor_analyses` — latest analysis per booker (no date restriction)
+- `chat_sessions` — most-recent session for language split (en/fr)
+
+Returns: `total_bookers`, `avg_satisfaction_bookers`, `avg_satisfaction_all`, `sentiment` split, `top_intents` ranked by count with %, `lang_split`.
+
+### Language comparison
+
+`analytics_lang_comparison(p_start, p_end)` assigns each visitor their primary language (most-used session `lang` in the period), then returns per-language: `visitor_count`, `session_count`, `analyzed_count`, `avg_satisfaction`, `satisfied`/`neutral`/`angry` counts, `form_submissions`. Uses latest `chat_visitor_analyses` per visitor with no date restriction (same pattern as booker profile). EN and FR are always shown first in the UI.
+
+### Document & source performance
+
+`analytics_source_performance(p_start, p_end, p_limit)` is always called with `p_start = null, p_end = null` (all-time — the section has no date filter). Returns:
+- `top_documents` — documents ranked by total citations aggregated from all their sections
+- `top_sections` — individual sections ranked by citation count with content preview (shown via toggle)
+- `dead_documents` — documents with zero citations ever (actionable dead content list)
+- `total_citations`, `total_cited_sections`, `total_documents`, `dead_document_count`
+
+`SourcePerformanceSection` accepts no date props. It is the first section on the Insights & Content page.
 
 ## Conversation analysis schema
 
