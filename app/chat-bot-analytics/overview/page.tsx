@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { RefreshCcw } from "lucide-react";
 import { AnalyticsOverviewSection } from "../sections/AnalyticsOverviewSection";
+import { BookerProfileSection } from "../sections/BookerProfileSection";
 import { MonthlyComparisonSection } from "../sections/MonthlyComparisonSection";
 import { type ChartItem } from "../sections/MiniBarChart";
 
@@ -262,6 +263,8 @@ export default function ChatAnalyticsOverviewPage() {
       />
 
       <MonthlyComparisonSection />
+
+      <BookerProfileSection startDate={startDate} endDate={endDate} />
     </div>
   );
 }
