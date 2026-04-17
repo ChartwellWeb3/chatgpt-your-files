@@ -174,9 +174,29 @@ export function MonthlyComparisonSection() {
     { label: "Corporate sessions", rawA: a.corporateSessions, rawB: b.corporateSessions, valA: a.corporateSessions, valB: b.corporateSessions },
     { label: "Residence sessions", rawA: a.residenceSessions, rawB: b.residenceSessions, valA: a.residenceSessions, valB: b.residenceSessions },
     { label: "2+ msg users", rawA: a.multiMessageVisitors, rawB: b.multiMessageVisitors, valA: a.multiMessageVisitors, valB: b.multiMessageVisitors },
-    { label: "Satisfied", rawA: a.aiSatisfied, rawB: b.aiSatisfied, valA: a.aiSatisfied, valB: b.aiSatisfied },
-    { label: "Neutral", rawA: a.aiNeutral, rawB: b.aiNeutral, valA: a.aiNeutral, valB: b.aiNeutral, higherIsBetter: false },
-    { label: getSentimentLabel("angry"), rawA: a.aiAngry, rawB: b.aiAngry, valA: a.aiAngry, valB: b.aiAngry, higherIsBetter: false },
+    {
+      label: "Satisfied",
+      rawA: a.aiTotal > 0 ? (a.aiSatisfied / a.aiTotal) * 100 : 0,
+      rawB: b.aiTotal > 0 ? (b.aiSatisfied / b.aiTotal) * 100 : 0,
+      valA: a.aiTotal > 0 ? `${((a.aiSatisfied / a.aiTotal) * 100).toFixed(1)}%` : "0%",
+      valB: b.aiTotal > 0 ? `${((b.aiSatisfied / b.aiTotal) * 100).toFixed(1)}%` : "0%",
+    },
+    {
+      label: "Neutral",
+      rawA: a.aiTotal > 0 ? (a.aiNeutral / a.aiTotal) * 100 : 0,
+      rawB: b.aiTotal > 0 ? (b.aiNeutral / b.aiTotal) * 100 : 0,
+      valA: a.aiTotal > 0 ? `${((a.aiNeutral / a.aiTotal) * 100).toFixed(1)}%` : "0%",
+      valB: b.aiTotal > 0 ? `${((b.aiNeutral / b.aiTotal) * 100).toFixed(1)}%` : "0%",
+      higherIsBetter: false,
+    },
+    {
+      label: getSentimentLabel("angry"),
+      rawA: a.aiTotal > 0 ? (a.aiAngry / a.aiTotal) * 100 : 0,
+      rawB: b.aiTotal > 0 ? (b.aiAngry / b.aiTotal) * 100 : 0,
+      valA: a.aiTotal > 0 ? `${((a.aiAngry / a.aiTotal) * 100).toFixed(1)}%` : "0%",
+      valB: b.aiTotal > 0 ? `${((b.aiAngry / b.aiTotal) * 100).toFixed(1)}%` : "0%",
+      higherIsBetter: false,
+    },
     { label: "Avg satisfaction", rawA: a.aiAvgScore, rawB: b.aiAvgScore, valA: a.aiAvgScore.toFixed(2), valB: b.aiAvgScore.toFixed(2) },
   ];
 
@@ -185,25 +205,52 @@ export function MonthlyComparisonSection() {
       <div className="flex items-center gap-2">
         <h2 className="text-lg font-semibold">Month-over-month comparison</h2>
         <InfoDialog
-          title="Month-over-month comparison"
-          summary="Compare key metrics between two full calendar months."
+          title="Month-over-month comparison — how metrics are calculated"
+          summary="Each row below explains what is counted and how the delta is calculated."
         >
-          <p>
-            <span className="font-medium text-foreground">What it shows:</span>{" "}
-            Side-by-side comparison of users, sessions, form submissions,
-            session type split, and AI sentiment between two completed months.
-          </p>
-          <p>
-            <span className="font-medium text-foreground">How to use:</span>{" "}
-            Pick any two past months using the selectors below. The current
-            month is excluded since it is not yet complete. Defaults to the two
-            most recently finished months.
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Delta column:</span>{" "}
-            Shows the percentage change from the first selected month to the
-            second. Green = improvement, red = decline.
-          </p>
+          <div className="space-y-4">
+            <div>
+              <p className="font-medium text-foreground mb-1">Delta column</p>
+              <p>Shows the % change from Month A to Month B: <span className="font-mono">(B − A) / A × 100</span>. Green = improvement, red = decline.</p>
+            </div>
+            <div>
+              <p className="font-medium text-foreground mb-1">Users</p>
+              <p>Count of distinct visitors whose <span className="font-mono">created_at</span> falls within the month. Delta compares raw counts.</p>
+            </div>
+            <div>
+              <p className="font-medium text-foreground mb-1">Sessions</p>
+              <p>Count of chat sessions started within the month. A single user can have multiple sessions (one per page). Delta compares raw counts.</p>
+            </div>
+            <div>
+              <p className="font-medium text-foreground mb-1">Forms submitted</p>
+              <p>Count of <span className="font-mono">visitor_forms</span> rows where <span className="font-mono">is_submitted = true</span> and <span className="font-mono">submitted_at</span> falls within the month. Delta compares raw counts.</p>
+            </div>
+            <div>
+              <p className="font-medium text-foreground mb-1">Form rate</p>
+              <p>Forms submitted ÷ Users × 100. Measures what % of visitors submitted a form. Delta compares the two rates, so user growth is already accounted for.</p>
+            </div>
+            <div>
+              <p className="font-medium text-foreground mb-1">Corporate sessions / Residence sessions</p>
+              <p>Sessions split by <span className="font-mono">residence_custom_id</span>: <span className="font-mono">corporateen</span> or <span className="font-mono">corporatefr</span> = corporate, everything else = residence. Delta compares raw counts.</p>
+            </div>
+            <div>
+              <p className="font-medium text-foreground mb-1">2+ msg users</p>
+              <p>Visitors who sent at least 2 user messages across all their sessions in the month. Filters out single-message or accidental opens. Delta compares raw counts.</p>
+            </div>
+            <div>
+              <p className="font-medium text-foreground mb-1">Satisfied / Neutral / Not satisfied</p>
+              <p>
+                Each visitor is AI-analyzed and assigned a sentiment: <span className="font-mono">satisfied</span>, <span className="font-mono">neutral</span>, or <span className="font-mono">angry</span>.
+                Only the latest analysis per visitor is used, and visitors are bucketed by <span className="font-mono">last_message_at</span> (when they were active), not when they were analyzed.
+                The value shown is the share of analyzed visitors in that sentiment bucket: <span className="font-mono">count ÷ total analyzed × 100</span>.
+                Delta compares the two rates, so an increase in raw neutral count caused purely by more users will not show as a worsening delta.
+              </p>
+            </div>
+            <div>
+              <p className="font-medium text-foreground mb-1">Avg satisfaction</p>
+              <p>Average of <span className="font-mono">satisfaction_1_to_10</span> across all analyzed visitors active in the month (1 = very unsatisfied, 10 = very satisfied). Delta compares the two averages.</p>
+            </div>
+          </div>
         </InfoDialog>
       </div>
 
