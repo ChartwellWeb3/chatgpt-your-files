@@ -96,8 +96,22 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
   // Date range filter (used to pull visitors + forms from DB)
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
+  const [residenceFilter, setResidenceFilter] = useState<string>("");
 
   const visitorIdFromUrl = searchParams.get("visitor_id") ?? "";
+
+  // ---- Residences for filter dropdown ----
+  const residencesQuery = useQuery({
+    queryKey: ["residences-list"],
+    queryFn: async (): Promise<{ custom_id: string; name: string }[]> => {
+      const { data, error } = await supabase
+        .from("residences")
+        .select("custom_id,name")
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as { custom_id: string; name: string }[];
+    },
+  });
 
   // ---- Visitors (pulled from DB based on date) ----
   const visitorsQuery = useQuery({
@@ -107,6 +121,7 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
       startDate,
       endDate,
       filterOption,
+      residenceFilter,
     ],
     queryFn: async (): Promise<{
       visitors: VisitorRow[];
@@ -122,6 +137,7 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
           p_end_date: endDate ? `${endDate} 23:59:59` : null,
           p_limit: limit,
           p_offset: offset,
+          p_residence_id: residenceFilter || null,
         }
       );
 
@@ -702,6 +718,13 @@ export default function ChatAnalyticsVisitorsSessionsPage() {
         deleting={deletingVisitor}
         filterOption={filterOption}
         setFilterOption={setFilterOption}
+        residenceFilter={residenceFilter}
+        setResidenceFilter={(id) => {
+          setResidenceFilter(id);
+          setVisitorPage(0);
+          setSelectedVisitorId("");
+        }}
+        residences={residencesQuery.data ?? []}
         bookTourStatsByVisitor={bookTourStatsByVisitor}
         reviewRequestsByVisitor={reviewRequestsByVisitor}
         onRequestReview={requestReview}
