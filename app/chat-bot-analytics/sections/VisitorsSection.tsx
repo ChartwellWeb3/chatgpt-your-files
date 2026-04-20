@@ -18,6 +18,13 @@ import { fmtDate } from "@/app/helpers/fmtDate";
 import { pill } from "@/components/ui/pill";
 import { useState } from "react";
 import { DateRangePicker } from "./DateRangePicker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type {
   ConversationAnalysis,
   VisitorAnalysisRow,
@@ -105,6 +112,9 @@ interface VisitorsProps {
   endDate: string;
   setStartDate: (date: string) => void;
   setEndDate: (date: string) => void;
+  residenceFilter: string;
+  setResidenceFilter: (id: string) => void;
+  residences: { custom_id: string; name: string }[];
 }
 
 export const VisitorsSessions = ({
@@ -138,6 +148,9 @@ export const VisitorsSessions = ({
   endDate,
   setStartDate,
   setEndDate,
+  residenceFilter,
+  setResidenceFilter,
+  residences,
 }: VisitorsProps) => {
   const [collapsed, setCollapsed] = useState(true);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -383,6 +396,26 @@ Output rules:
                 ) : null}
               </div>
             </div>
+            <Select
+              value={residenceFilter || "__all__"}
+              onValueChange={(val) => {
+                setResidenceFilter(val === "__all__" ? "" : val);
+                setSelectedVisitorId("");
+              }}
+            >
+              <SelectTrigger className="w-full text-xs h-8">
+                <SelectValue placeholder="All residences" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All residences</SelectItem>
+                {residences.map((r) => (
+                  <SelectItem key={r.custom_id} value={r.custom_id}>
+                    {r.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <div className="rounded-lg border border-border bg-background p-1 grid grid-cols-2 gap-1">
               <button
                 type="button"

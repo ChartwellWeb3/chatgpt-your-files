@@ -53,6 +53,9 @@ type ReplaySectionProps = {
   deleting: boolean;
   filterOption: FilterOption;
   setFilterOption: (v: FilterOption) => void;
+  residenceFilter: string;
+  setResidenceFilter: (id: string) => void;
+  residences: { custom_id: string; name: string }[];
   bookTourStatsByVisitor: Map<string, BookATourStats>;
   reviewRequestsByVisitor: Map<
     string,
@@ -131,6 +134,9 @@ export function AnalyticsReplaySection({
   deleting,
   filterOption,
   setFilterOption,
+  residenceFilter,
+  setResidenceFilter,
+  residences,
   bookTourStatsByVisitor,
   reviewRequestsByVisitor,
   onRequestReview,
@@ -177,6 +183,9 @@ export function AnalyticsReplaySection({
           deleting={deleting}
           filterOption={filterOption}
           setFilterOption={setFilterOption}
+          residenceFilter={residenceFilter}
+          setResidenceFilter={setResidenceFilter}
+          residences={residences}
           bookTourStatsByVisitor={bookTourStatsByVisitor}
         reviewRequestsByVisitor={reviewRequestsByVisitor}
         onRequestReview={onRequestReview}
