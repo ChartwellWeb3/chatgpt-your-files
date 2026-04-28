@@ -8,6 +8,7 @@ import { RefreshCcw } from "lucide-react";
 import { AnalyticsOverviewSection } from "../sections/AnalyticsOverviewSection";
 import { BookerProfileSection } from "../sections/BookerProfileSection";
 import { DateRangePicker } from "../sections/DateRangePicker";
+import { ErrorsOverviewSection } from "../sections/ErrorsOverviewSection";
 import { LangComparisonSection } from "../sections/LangComparisonSection";
 import { MonthlyComparisonSection } from "../sections/MonthlyComparisonSection";
 import { type ChartItem } from "../sections/MiniBarChart";
@@ -63,12 +64,24 @@ type DurationBucketSummary = {
   angry: Record<string, DurationBucket>;
 };
 
+type ErrorAlert = {
+  id: number;
+  error_key: string;
+  last_sent_at: string;
+  count: number;
+};
+
 const EMPTY_OVERVIEW: OverviewCounts = {
   visitors: 0,
   sessions: 0,
   totalForms: 0,
   submittedForms: 0,
 };
+
+function toUtcDayStart(value: string, dayOffset = 0) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + dayOffset)).toISOString();
+}
 
 export default function ChatAnalyticsOverviewPage() {
   const supabase = createClient();
@@ -179,6 +192,30 @@ export default function ChatAnalyticsOverviewPage() {
     },
   });
 
+  const errorsQuery = useQuery({
+    queryKey: ["analytics-error-alerts", startDate, endDate],
+    queryFn: async (): Promise<ErrorAlert[]> => {
+      let query = supabase
+        .from("chatbot_error_alerts")
+        .select("id,error_key,last_sent_at,count")
+        .order("last_sent_at", { ascending: false })
+        .limit(10);
+
+      if (startDate) {
+        query = query.gte("last_sent_at", toUtcDayStart(startDate));
+      }
+
+      if (endDate) {
+        query = query.lt("last_sent_at", toUtcDayStart(endDate, 1));
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      return (data ?? []) as ErrorAlert[];
+    },
+  });
+
   const refreshAll = async () => {
     await Promise.all([
       overviewSummaryQuery.refetch(),
@@ -186,6 +223,7 @@ export default function ChatAnalyticsOverviewPage() {
       durationSummaryQuery.refetch(),
       durationBySentimentQuery.refetch(),
       durationBucketQuery.refetch(),
+      errorsQuery.refetch(),
     ]);
   };
 
@@ -284,7 +322,13 @@ export default function ChatAnalyticsOverviewPage() {
 
       <MonthlyComparisonSection />
 
-
+      <ErrorsOverviewSection
+        startDate={startDate}
+        endDate={endDate}
+        rows={errorsQuery.data ?? []}
+        isLoading={errorsQuery.isLoading}
+        error={errorsQuery.error}
+      />
     </div>
   );
 }
