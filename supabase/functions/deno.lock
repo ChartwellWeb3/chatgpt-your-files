@@ -1,0 +1,28 @@
+{
+  "version": "5",
+  "specifiers": {
+    "npm:@types/node@*": "24.2.0"
+  },
+  "npm": {
+    "@types/node@24.2.0": {
+      "integrity": "sha512-3xyG3pMCq3oYCNg7/ZP+E1ooTaGB4cG8JWRsqqOYQdbWNY4zbaV0Ennrd7stjiJEFZCaybcIgpTjJWHRfBSIDw==",
+      "dependencies": [
+        "undici-types"
+      ]
+    },
+    "undici-types@7.10.0": {
+      "integrity": "sha512-t5Fy/nfn+14LuOc2KNYg75vZqClpAiqscVvMygNnlsHBFpSXdJaYtXMcdNLpl/Qvc3P2cB3s6lOV51nqsFq4ag=="
+    }
+  },
+  "redirects": {
+    "https://esm.sh/@supabase/functions-js/src/edge-runtime.d.ts": "https://esm.sh/@supabase/functions-js@2.5.0/src/edge-runtime.d.ts"
+  },
+  "remote": {
+    "https://esm.sh/@supabase/supabase-js@2.21.0": "f137b1c1e63db6d0b00645041d5c2b16bc8ce83109e240daacea3a080e6c8d41",
+    "https://esm.sh/@supabase/supabase-js@2.81.1": "bae1ab984623f88e3a3d7552b04f7c9c56978057d8db8cd90726f77c79161713",
+    "https://esm.sh/v132/mdast-util-from-markdown@2.0.0": "2b6c6221a6bea6573438a4ac4af7c4f687c452151705f44f4e754cbf508a98a3",
+    "https://esm.sh/v132/mdast-util-to-markdown@2.1.0": "cc71c158a820946d0dd9d4e98821faf8324075286312ee71d4d4c38b97414444",
+    "https://esm.sh/v132/mdast-util-to-string@4.0.0": "4d70c87a801331146858e2a3c418669a90e4c5093a68b9d83183e30615064a69",
+    "https://esm.sh/v132/unist-builder@4.0.0": "04d674d62cb9e1ca567484e832bab41be2b5d72e49be9657f4a914fba4c2362f"
+  }
+}

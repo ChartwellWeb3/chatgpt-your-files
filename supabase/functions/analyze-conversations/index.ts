@@ -370,14 +370,25 @@ async function runAnalysis(opts: {
       };
     })
     .filter(
-      (entry): entry is {
+      (
+        entry: {
+          visitor_question: string;
+          assistant_response: string;
+          issue_type: IssueType;
+          why_insufficient: string;
+        } | null,
+      ): entry is {
         visitor_question: string;
         assistant_response: string;
         issue_type: IssueType;
         why_insufficient: string;
       } =>
-        !!entry &&
-        (entry.visitor_question || entry.assistant_response || entry.why_insufficient)
+        Boolean(
+          entry &&
+            (entry.visitor_question ||
+              entry.assistant_response ||
+              entry.why_insufficient),
+        )
     );
 
   const analysis = {

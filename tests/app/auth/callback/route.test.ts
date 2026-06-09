@@ -26,6 +26,7 @@ describe("GET /auth/callback", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     process.env = { ...envBackup };
   });
 
@@ -41,7 +42,7 @@ describe("GET /auth/callback", () => {
   });
 
   it("redirects to forwarded host in non-local environments", async () => {
-    process.env.NODE_ENV = "production";
+    vi.stubEnv("NODE_ENV", "production");
     createClientMock.mockResolvedValue(buildSupabase(null));
 
     const { GET } = await import("@/app/auth/callback/route");
@@ -59,7 +60,7 @@ describe("GET /auth/callback", () => {
   });
 
   it("falls back to request origin in production without x-forwarded-host", async () => {
-    process.env.NODE_ENV = "production";
+    vi.stubEnv("NODE_ENV", "production");
     createClientMock.mockResolvedValue(buildSupabase(null));
 
     const { GET } = await import("@/app/auth/callback/route");
@@ -73,7 +74,7 @@ describe("GET /auth/callback", () => {
   });
 
   it("redirects to origin in development", async () => {
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
     createClientMock.mockResolvedValue(buildSupabase(null));
 
     const { GET } = await import("@/app/auth/callback/route");

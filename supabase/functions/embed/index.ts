@@ -6,6 +6,11 @@ import { Database } from "../_lib/database.ts";
 
 const model = new Supabase.ai.Session("gte-small");
 
+type EmbeddingRow = {
+  id: string | number;
+  [key: string]: unknown;
+};
+
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
@@ -62,10 +67,11 @@ Deno.serve(async (req) => {
     });
   }
 
-  for (const row of rows) {
-    const { id, [contentColumn]: content } = row;
+  for (const row of (rows ?? []) as unknown as EmbeddingRow[]) {
+    const { id } = row;
+    const content = row[contentColumn];
 
-    if (!content) {
+    if (typeof content !== "string" || !content) {
       console.error(`No content available in column '${contentColumn}'`);
       continue;
     }

@@ -42,10 +42,10 @@ Deno.serve(async (req) => {
       `[DEBUG] Starting embedding generation for customId: ${customId}`
     );
     // 1. Generate Embedding (This requires the AI feature to be enabled)
-    const output = await model.run(message, {
+    const output = (await model.run(message, {
       mean_pool: true,
       normalize: true,
-    });
+    })) as number[];
     console.log(
       `[DEBUG] Embedding generated. Vector length: ${output.length}.`
     );
@@ -91,11 +91,12 @@ Deno.serve(async (req) => {
       }
     );
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     // Catch all errors and return a 500 response with the error details
     console.error("Edge Function Fatal Error:", error);
     return new Response(
       JSON.stringify({
-        error: error.message || "Unknown internal error.",
+        error: message || "Unknown internal error.",
         detail:
           "Please check the full Supabase Function logs for the exact stack trace to diagnose the AI or RPC failure.",
       }),

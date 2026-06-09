@@ -53,7 +53,7 @@ function buildSupabase(options?: {
 
   const single = vi.fn().mockResolvedValue({ data: opts.inserted, error: opts.insertErr });
   const select = vi.fn(() => ({ single }));
-  const upsert = vi.fn(() => ({ select }));
+  const upsert = vi.fn((payload: Record<string, unknown>) => ({ select }));
 
   const from = vi.fn((table: string) => {
     if (table === "chat_messages") return chatMessagesChain;
@@ -315,10 +315,12 @@ describe("POST /api/analytics/satisfaction", () => {
     });
 
     expect(supabase.__upsert).toHaveBeenCalledTimes(1);
-    const upsertPayload = supabase.__upsert.mock.calls[0][0];
-    expect(upsertPayload.page_type).toBe("corporate");
-    expect(upsertPayload.evidence_goal_met).toBe("yes");
-    expect(Array.isArray(upsertPayload.evidence_key_quotes)).toBe(true);
+    const upsertPayload = supabase.__upsert.mock.calls.at(0)?.[0];
+    expect(upsertPayload).toMatchObject({
+      page_type: "corporate",
+      evidence_goal_met: "yes",
+    });
+    expect(Array.isArray(upsertPayload?.evidence_key_quotes)).toBe(true);
   });
 
   it("returns 500 when analysis upsert fails", async () => {

@@ -118,6 +118,8 @@ npm run dev
 - `npm run dev`: start Next.js dev server.
 - `npm run build`: build the app.
 - `npm run start`: run the production server.
+- `npm run typecheck`: run TypeScript checks across the app and tests.
+- `npm run ci`: run the local CI gate (`typecheck`, tests, production build).
 - `npm run gen:types`: regenerate Supabase types in `supabase/functions/_lib/database.ts`.
 - `npm test`: run the full automated test suite once.
 - `npm run test:watch`: run tests in watch mode.

@@ -5,6 +5,9 @@ import { processMarkdown } from "../_lib/markdown-parser.ts";
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
+type DocumentWithStoragePath =
+  Database["public"]["Views"]["documents_with_storage_path"]["Row"];
+
 Deno.serve(async (req) => {
   if (!supabaseUrl || !supabaseAnonKey) {
     return new Response(
@@ -43,11 +46,12 @@ Deno.serve(async (req) => {
 
   const { document_id } = await req.json();
 
-  const { data: document } = await supabase
+  const { data: rawDocument } = await supabase
     .from("documents_with_storage_path")
     .select()
     .eq("id", document_id)
     .single();
+  const document = rawDocument as DocumentWithStoragePath | null;
 
   if (!document?.storage_object_path) {
     return new Response(
