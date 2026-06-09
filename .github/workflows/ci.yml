@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: App checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:15431
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-anon-key
+      OPENAI_API_KEY: ci-openai-key
+      OPENAI_ANALYSIS_MODEL: gpt-5.2
+      SITECORE_GRAPHQL_ENDPOINT: http://127.0.0.1/graphql
+      SITECORE_RESIDENCE_DATASOURCE: /sitecore/content/chartwell
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  supabase-functions:
+    name: Supabase Edge Function checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Typecheck Edge Functions
+        run: >
+          deno check
+          --config supabase/functions/deno.json
+          supabase/functions/analyze-conversations/index.ts
+          supabase/functions/conversation-durations/index.ts
+          supabase/functions/embed/index.ts
+          supabase/functions/process/index.ts
+          supabase/functions/search-vector/index.ts

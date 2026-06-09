@@ -5,6 +5,11 @@ import {
   populateModelData,
   provinceValues,
 } from "@/app/chatbot-content-management/helpers";
+import type { MappedResidence, ModelDataResult } from "@/app/chatbot-content-management/helpers";
+
+const isMappedResidence = (
+  row: ModelDataResult[number],
+): row is MappedResidence => !("provinces" in row) && !("careServices" in row);
 
 const sitecoreData = {
   dsEn: {
@@ -116,9 +121,7 @@ describe("chatbot-content-management helpers", () => {
 
   it("returns residence rows sorted by propertyId", () => {
     const allRows = modelData(sitecoreData as any, "en");
-    const mappedRows = allRows.filter(
-      (row) => !("provinces" in row) && !("careServices" in row),
-    );
+    const mappedRows = allRows.filter(isMappedResidence);
 
     expect(mappedRows.map((row) => row.propertyId)).toEqual(["100", "200"]);
   });

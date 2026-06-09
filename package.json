@@ -4,6 +4,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "ci": "npm run typecheck && npm test && npm run build",
     "gen:types": "supabase gen types typescript --local > supabase/functions/_lib/database.ts",
     "test": "vitest run",
     "test:watch": "vitest",
