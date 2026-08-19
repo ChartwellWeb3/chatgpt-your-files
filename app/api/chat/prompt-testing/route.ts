@@ -4,6 +4,8 @@ import { prompt, type ChatBotData } from "@/lib/chatbot/prompts";
 
 export const runtime = "nodejs";
 
+const MODEL_FALLBACK = "gpt-5.6-luna";
+
 type SearchDoc = {
   content: string;
   document_section_id: number | null;
@@ -171,7 +173,8 @@ export async function POST(req: Request) {
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const stream = await openai.responses.create({
-    model: "gpt-5.2",
+    model: process.env.OPENAI_ANALYSIS_MODEL ?? MODEL_FALLBACK,
+    reasoning: { effort: "none" },
     input: [
       { role: "developer", content: system },
       ...sanitizedHistory,

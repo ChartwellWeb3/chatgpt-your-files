@@ -5,7 +5,7 @@ import { createClient as createServerClient } from "@/app/utils/supabase/server"
 export const runtime = "nodejs";
 
 const PROMPT_VERSION = "v1";
-const MODEL_FALLBACK = "gpt-5.2";
+const MODEL_FALLBACK = "gpt-5.6-luna";
 const INTENT_ENUM = [
   "pricing_and_costs",
   "waitlist_or_availability",
@@ -318,6 +318,7 @@ export async function POST(req: Request) {
 
   const r = await openai.responses.create({
     model,
+    reasoning: { effort: "none" },
     instructions: analyzerInstructions(),
     input: [
       {

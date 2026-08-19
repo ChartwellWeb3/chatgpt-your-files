@@ -25,7 +25,7 @@ npm run gen:types     # Regenerate Supabase TypeScript types into supabase/funct
 - **Styling**: Tailwind CSS 3, shadcn/ui (Radix UI primitives)
 - **Data fetching**: TanStack React Query v5
 - **Charts**: Recharts
-- **AI**: OpenAI API (via `OPENAI_ANALYSIS_MODEL` env, default `gpt-5.2`)
+- **AI**: OpenAI API (via `OPENAI_ANALYSIS_MODEL` env, default `gpt-5.6-luna`)
 - **Testing**: Vitest 4, jsdom, @testing-library/react
 
 ### Directory layout
@@ -109,7 +109,7 @@ All functions live in `supabase/functions/` and run as Deno processes:
 | `analyze-conversations` | AI analysis job: fetches unanalyzed visitors, calls OpenAI, stores results in `chat_visitor_analyses` |
 | `conversation-durations` | Computes per-visitor and per-session duration metrics |
 
-The analyzer uses `OPENAI_ANALYSIS_MODEL` env var (default `gpt-5.2`) and stores results with `prompt_version: "v1"`. The analyzer prompt is defined in `lib/chatbot/analyzerPrompt.ts` and reused in both the edge function and the analytics UI.
+The analyzer uses `OPENAI_ANALYSIS_MODEL` env var (default `gpt-5.6-luna`) and stores results with `prompt_version: "v1"`. The analyzer prompt is defined in `lib/chatbot/analyzerPrompt.ts` and reused in both the edge function and the analytics UI.
 
 ## Environment variables
 
@@ -120,7 +120,7 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_DB_URL=              # postgresql://USER:PASSWORD@HOST:PORT/DB
 OPENAI_API_KEY=
-OPENAI_ANALYSIS_MODEL=        # e.g. gpt-5.2
+OPENAI_ANALYSIS_MODEL=        # e.g. gpt-5.6-luna
 SITECORE_GRAPHQL_ENDPOINT=    # https://your-host/api/graphql/v1
 SITECORE_EDGE_CONTEXT_ID=     # optional, sent as sc_apikey
 SITECORE_GQL_TOKEN=           # optional, sent as X-GQL-TOKEN
