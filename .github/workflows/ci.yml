@@ -24,7 +24,7 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:15431
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-anon-key
       OPENAI_API_KEY: ci-openai-key
-      OPENAI_ANALYSIS_MODEL: gpt-5.2
+      OPENAI_ANALYSIS_MODEL: gpt-5.6-luna
       SITECORE_GRAPHQL_ENDPOINT: http://127.0.0.1/graphql
       SITECORE_RESIDENCE_DATASOURCE: /sitecore/content/chartwell
     steps:

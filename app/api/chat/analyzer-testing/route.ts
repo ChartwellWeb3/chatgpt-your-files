@@ -5,6 +5,8 @@ import { analyzerInstructions } from "@/lib/chatbot/analyzerPrompt";
 
 export const runtime = "nodejs";
 
+const MODEL_FALLBACK = "gpt-5.6-luna";
+
 type TranscriptItem = {
   role: "user" | "assistant" | "system";
   content: string;
@@ -132,7 +134,7 @@ export async function POST(req: Request) {
   }
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const model = process.env.OPENAI_ANALYSIS_MODEL ?? "gpt-5.2";
+  const model = process.env.OPENAI_ANALYSIS_MODEL ?? MODEL_FALLBACK;
 
   const payload = {
     transcript: sanitized.map((m, i) => ({
@@ -150,6 +152,7 @@ export async function POST(req: Request) {
 
   const request: Parameters<typeof openai.responses.create>[0] = {
     model,
+    reasoning: { effort: "none" },
     instructions,
     input: [
       {

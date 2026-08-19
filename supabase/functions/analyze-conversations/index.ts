@@ -11,7 +11,7 @@ type TranscriptItem = {
 const OPENAI_URL = "https://api.openai.com/v1/responses";
 const PROMPT_VERSION = "v1";
 
-const MODEL_FALLBACK = "gpt-5.2";
+const MODEL_FALLBACK = "gpt-5.6-luna";
 const INTENT_ENUM = [
   "pricing_and_costs",
   "waitlist_or_availability",
@@ -217,6 +217,7 @@ async function runAnalysis(opts: {
 
   const body = {
     model: opts.model,
+    reasoning: { effort: "none" },
     instructions: analyzerInstructions(),
     input: [
       {
