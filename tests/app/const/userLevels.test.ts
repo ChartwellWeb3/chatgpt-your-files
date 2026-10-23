@@ -11,6 +11,11 @@ const isAllowedForPrefixes = (pathname: string, prefixes: { path: string }[]) =>
   );
 
 describe("userLevels", () => {
+  it("allows website performance data for every signed-in user level", () => {
+    for (const prefixes of [LEVEL1_ALLOWED_PREFIXES, LEVEL2_ALLOWED_PREFIXES, LEVEL3_ALLOWED_PREFIXES]) {
+      expect(isAllowedForPrefixes("/api/performance", prefixes)).toBe(true);
+    }
+  });
   it("keeps level 1 with API access", () => {
     expect(LEVEL1_ALLOWED_PREFIXES.some((item) => item.path === "/api")).toBe(true);
   });

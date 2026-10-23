@@ -1,0 +1,181 @@
+{
+  "id": "about",
+  "url": "https://contentsdk-4xnj3dp44-chartwell-rr.vercel.app/about-us",
+  "name": "About us",
+  "path": "/about-us",
+  "runs": [
+    {
+      "metrics": {
+        "cls": 0.008516056861629163,
+        "fcp": 406.46999999999997,
+        "lcp": 980.3180000000002,
+        "tbt": 257.9999999999998,
+        "score": 87,
+        "speedIndex": 1409.9037869029166
+      },
+      "htmlPath": "pages/about/contentsdk_4xnj3dp44_chartwell_rr_vercel_app-about_us-2026_10_21_19_23_31.report.html",
+      "insights": [
+        {
+          "id": "unused-javascript",
+          "title": "Reduce unused JavaScript",
+          "estimatedSavingsMs": 100,
+          "estimatedSavingsBytes": 583688
+        },
+        {
+          "id": "uses-responsive-images",
+          "title": "Properly size images",
+          "estimatedSavingsMs": 50,
+          "estimatedSavingsBytes": 105247
+        },
+        {
+          "id": "offscreen-images",
+          "title": "Defer offscreen images",
+          "estimatedSavingsMs": 50,
+          "estimatedSavingsBytes": 82558
+        }
+      ],
+      "jsonPath": "pages/about/contentsdk_4xnj3dp44_chartwell_rr_vercel_app-about_us-2026_10_21_19_23_31.report.json",
+      "fetchedAt": "2026-10-21T19:23:31.670Z"
+    },
+    {
+      "metrics": {
+        "cls": 0.008516056861629163,
+        "fcp": 377.38,
+        "lcp": 950.7950000000001,
+        "tbt": 264.9999999999993,
+        "score": 88,
+        "speedIndex": 1198.0603377023654
+      },
+      "htmlPath": "pages/about/contentsdk_4xnj3dp44_chartwell_rr_vercel_app-about_us-2026_10_21_19_23_53.report.html",
+      "insights": [
+        {
+          "id": "unused-javascript",
+          "title": "Reduce unused JavaScript",
+          "estimatedSavingsMs": 40,
+          "estimatedSavingsBytes": 583834
+        },
+        {
+          "id": "uses-responsive-images",
+          "title": "Properly size images",
+          "estimatedSavingsMs": 30,
+          "estimatedSavingsBytes": 105247
+        },
+        {
+          "id": "offscreen-images",
+          "title": "Defer offscreen images",
+          "estimatedSavingsMs": 0,
+          "estimatedSavingsBytes": 82558
+        }
+      ],
+      "jsonPath": "pages/about/contentsdk_4xnj3dp44_chartwell_rr_vercel_app-about_us-2026_10_21_19_23_53.report.json",
+      "fetchedAt": "2026-10-21T19:23:53.810Z"
+    },
+    {
+      "metrics": {
+        "cls": 0.008516056861629163,
+        "fcp": 390.531,
+        "lcp": 1001.0350000000003,
+        "tbt": 288.0000000000002,
+        "score": 85,
+        "speedIndex": 1416.9522706393414
+      },
+      "htmlPath": "pages/about/contentsdk_4xnj3dp44_chartwell_rr_vercel_app-about_us-2026_10_21_19_24_15.report.html",
+      "insights": [
+        {
+          "id": "unused-javascript",
+          "title": "Reduce unused JavaScript",
+          "estimatedSavingsMs": 130,
+          "estimatedSavingsBytes": 583753
+        },
+        {
+          "id": "uses-responsive-images",
+          "title": "Properly size images",
+          "estimatedSavingsMs": 40,
+          "estimatedSavingsBytes": 105247
+        },
+        {
+          "id": "offscreen-images",
+          "title": "Defer offscreen images",
+          "estimatedSavingsMs": 0,
+          "estimatedSavingsBytes": 82558
+        }
+      ],
+      "jsonPath": "pages/about/contentsdk_4xnj3dp44_chartwell_rr_vercel_app-about_us-2026_10_21_19_24_15.report.json",
+      "fetchedAt": "2026-10-21T19:24:15.820Z"
+    }
+  ],
+  "locale": "en",
+  "status": "complete",
+  "identity": {
+    "path": "/about-us",
+    "site": "sxastarter",
+    "title": "About Us",
+    "itemId": "cababb8f-012e-4de7-aead-911ca47eed29",
+    "language": "en"
+  },
+  "insights": [
+    {
+      "id": "unused-javascript",
+      "title": "Reduce unused JavaScript",
+      "estimatedSavingsMs": 100,
+      "estimatedSavingsBytes": 583688
+    },
+    {
+      "id": "uses-responsive-images",
+      "title": "Properly size images",
+      "estimatedSavingsMs": 50,
+      "estimatedSavingsBytes": 105247
+    },
+    {
+      "id": "offscreen-images",
+      "title": "Defer offscreen images",
+      "estimatedSavingsMs": 50,
+      "estimatedSavingsBytes": 82558
+    }
+  ],
+  "aggregate": {
+    "noisy": false,
+    "range": {
+      "cls": {
+        "max": 0.008516056861629163,
+        "min": 0.008516056861629163
+      },
+      "fcp": {
+        "max": 406.46999999999997,
+        "min": 377.38
+      },
+      "lcp": {
+        "max": 1001.0350000000003,
+        "min": 950.7950000000001
+      },
+      "tbt": {
+        "max": 288.0000000000002,
+        "min": 257.9999999999998
+      },
+      "score": {
+        "max": 88,
+        "min": 85
+      },
+      "speedIndex": {
+        "max": 1416.9522706393414,
+        "min": 1198.0603377023654
+      }
+    },
+    "metrics": {
+      "cls": 0.008516056861629163,
+      "fcp": 390.531,
+      "lcp": 980.3180000000002,
+      "tbt": 264.9999999999993,
+      "score": 87,
+      "speedIndex": 1409.9037869029166
+    }
+  },
+  "comparison": {
+    "metrics": {},
+    "baselineId": null,
+    "firstBaseline": true,
+    "classification": "Insufficient data",
+    "baselineDeploymentId": null
+  },
+  "representativeRun": 1
+}

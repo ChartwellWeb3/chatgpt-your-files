@@ -1,15 +1,3 @@
-// export const Links = {
-//   CHATBOT_CONTENT_MANAGEMENT: {
-//     href: "/chatbot-content-management",
-//     label: "Chat Bot Content Management",
-//   },
-//   CHAT_BOT_ANALYTICS: {
-//     href: "/chat-bot-analytics",
-//     label: "Chat Bot Analytics",
-//   },
-//   USER_DATA_TRACKER: { href: "/user-data-tracker", label: "User Data Tracker" },
-// };
-
 export const ChatbotLinks = [
   {
     href: "/chatbot-content-management",
@@ -27,8 +15,8 @@ export const ChatbotLinks = [
 
 export const Links = [
   {
-    href: "/user-data-tracker",
-    label: "User Data Tracker",
+    href: "/chartwell-website-performance",
+    label: "Chartwell website performance",
   },
   {
     href: "/team",

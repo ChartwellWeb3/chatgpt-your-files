@@ -31,7 +31,7 @@ export default async function RootLayout({ children }: PropsWithChildren) {
     "/chatbot-content-management": <Files className="h-4 w-4" />,
     "/chat-bot-analytics": <BarChart3 className="h-4 w-4" />,
     "/chatbot-prompt-testing": <FlaskConical className="h-4 w-4" />,
-    "/user-data-tracker": <Database className="h-4 w-4" />,
+    "/chartwell-website-performance": <Database className="h-4 w-4" />,
     "/team": <Users className="h-4 w-4" />,
   };
   const chatbotMenuLinks = ChatbotLinks.map((link) => ({
