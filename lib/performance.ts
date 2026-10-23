@@ -116,11 +116,10 @@ export function runSummary(run: PerformanceRun | undefined, pages: PerformancePa
   const complete = rows.filter((p) => p.status === "complete");
   const valid = run?.upload_status === "ready" && run.status !== "failed" ? complete.filter((p) => isNoisy(p) === false && metricValue(p, "score") !== null) : [];
   return { rows, measured: complete.length, total: rows.length, noisy: rows.filter(isNoisy).length, failures: rows.filter((p) => p.status === "failed").length,
-    regressions: rows.filter(isRegression).length, score: valid.length ? valid.reduce((sum, p) => sum + metricValue(p, "score")!, 0) / valid.length : null };
+    regressions: rows.filter(isRegression).length, included: valid.length, score: valid.length ? valid.reduce((sum, p) => sum + metricValue(p, "score")!, 0) / valid.length : null };
 }
-export type TrendPoint = { deploymentId: string; runId?: string; date: string; build: string; value: number | null; reason?: string };
-export function buildTrend(payload: PerformancePayload, target: PerformancePage, device: Device, fingerprint: string, metric: MetricKey, selectedRun?: PerformanceRun): TrendPoint[] {
-  const identity = pageIdentity(target);
+export type TrendPoint = { deploymentId: string; runId?: string; date: string; build: string; value: number | null; reason?: string; includedPages?: number; totalPages?: number };
+function buildDeploymentTrend(payload: PerformancePayload, device: Device, fingerprint: string, selectedRun: PerformanceRun | undefined, measure: (run: PerformanceRun) => Pick<TrendPoint, "value" | "reason" | "includedPages" | "totalPages">): TrendPoint[] {
   return [...payload.deployments].reverse().map((deployment) => {
     const candidates = payload.historyRuns.filter((r) => r.deployment_id === deployment.id && r.device === device).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
     const run = selectedRun?.deployment_id === deployment.id && selectedRun.device === device ? selectedRun : candidates[0];
@@ -128,11 +127,38 @@ export function buildTrend(payload: PerformancePayload, target: PerformancePage,
     if (!run) return { ...point, reason: "No measurement" };
     if (!fingerprint || run.profile_fingerprint !== fingerprint) return { ...point, reason: "Different or unknown measurement profile" };
     if (run.upload_status !== "ready" || run.status !== "complete") return { ...point, reason: "Audit or ingestion incomplete" };
-    const page = payload.historyPages.find((p) => p.run_id === run.id && pageIdentity(p) === identity);
-    if (!page || page.status !== "complete") return { ...point, reason: "Page not measured successfully" };
-    if (isNoisy(page) !== false) return { ...point, reason: isNoisy(page) ? "Inconsistent samples" : "Sample consistency not reported" };
-    return { ...point, value: metricValue(page, metric) };
+    return { ...point, ...measure(run) };
   }).sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+}
+export function buildTrend(payload: PerformancePayload, target: PerformancePage, device: Device, fingerprint: string, metric: MetricKey, selectedRun?: PerformanceRun): TrendPoint[] {
+  const identity = pageIdentity(target);
+  return buildDeploymentTrend(payload, device, fingerprint, selectedRun, (run) => {
+    const page = payload.historyPages.find((p) => p.run_id === run.id && pageIdentity(p) === identity);
+    if (!page || page.status !== "complete") return { value: null, reason: "Page not measured successfully" };
+    if (isNoisy(page) !== false) return { value: null, reason: isNoisy(page) ? "Inconsistent samples" : "Sample consistency not reported" };
+    return { value: metricValue(page, metric) };
+  });
+}
+export function buildOverallTrend(payload: PerformancePayload, device: Device, fingerprint: string, selectedRun?: PerformanceRun): TrendPoint[] {
+  // The API includes selected-deployment pages in both arrays. Each page must
+  // contribute once; richer current-deployment rows take precedence.
+  const uniquePages = new Map([...payload.historyPages, ...payload.pages].map((page) => [pageRowId(page), page]));
+  const pagesByRun = new Map<string, PerformancePage[]>();
+  for (const page of Array.from(uniquePages.values())) {
+    const pages = pagesByRun.get(page.run_id) ?? [];
+    pages.push(page);
+    pagesByRun.set(page.run_id, pages);
+  }
+  return buildDeploymentTrend(payload, device, fingerprint, selectedRun, (run) => {
+    const pages = pagesByRun.get(run.id) ?? [];
+    const summary = runSummary(run, pages);
+    return {
+      value: summary.score,
+      includedPages: summary.included,
+      totalPages: summary.total,
+      ...(summary.score === null ? { reason: pages.length ? "No complete, consistent page scores" : "Page measurements unavailable" } : {}),
+    };
+  });
 }
 export function deploymentCommits(deployment: PerformanceDeployment, rows: PerformanceCommit[], direction: "added" | "removed"): PerformanceCommit[] {
   const embedded = direction === "added" ? deployment.deployment_changes?.commits : deployment.deployment_changes?.removedCommits;
