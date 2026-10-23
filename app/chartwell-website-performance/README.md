@@ -10,7 +10,7 @@ Each app deployment displays one environment from the server-only **`PERFORMANCE
 | --- | --- |
 | `page.tsx` | Dynamic server route entry point. Reads the configured environment, renders its setup state if invalid, and passes the environment to the client dashboard. |
 | `performance-dashboard.tsx` | Fixed environment badge, deployment/date filters, selected attempts, device score cards, page table, inline expansion, and tabs. |
-| `performance-trend.tsx` | Shared score-history chart. Used in the overview and inside expanded page details. |
+| `performance-trend.tsx` | Shared score-history chart. Shows an overall page-score average in the overview and the individual page's score inside expanded details. |
 | `performance-details.tsx` | Fetches one full page result on expansion. Shows aggregate values, the page-specific chart, opportunities, and individual samples. |
 | `performance-commits.tsx` | Previous/current deployment identities, added/removed commits, message search, and expandable messages. |
 | `performance-score.tsx` | Performance-specific score ring and score value, using the shared badge primitive. |
@@ -54,16 +54,18 @@ The attempt selector permits inspection of older attempts from the same deployme
 
 The chart currently plots **Score / 100 only**. LCP, TBT, CLS, FCP, and Speed Index remain available in the page table and samples, but are not selectable chart metrics.
 
-The overview chart has page and device controls. A chart inside expanded page details is fixed to that page's identity, locale, and device. Both reuse the same component and already-fetched history. Each chart also offers:
+The overview chart shows the **overall average of eligible page scores for each deployment**. It has mobile/desktop controls and no page picker. An “All measured pages” badge identifies its scope. A chart inside expanded page details stays fixed to that page's identity, locale, and device, showing its individual score. Both reuse the same component and already-fetched history. Each chart also offers:
 
 - A measurement-profile selector, preventing silent mixing of incompatible settings.
 - A latest trusted value and a count of trusted points/gaps.
-- Hover details with build number, score, and timestamp.
+- Hover details with build number, score, and timestamp. Overall averages also show how many page scores contributed.
 - **View values**, an optional table explaining included points and gaps.
 
 Dates on the chart come from deployment completion, falling back to deployment creation when necessary. A deployment contributes at most one point for the selected device. For the currently selected deployment, the explicitly selected attempt is used; for other deployments, the newest attempt is used. Reruns do not create additional deployment points.
 
 The “latest trusted point” may belong to an earlier deployment if the newest measurement is incomplete or unsuitable. It is not substituted into the current deployment's page score.
+
+The overview labels its value **Average score / 100** and its summary **latest trusted average**. The optional values table includes the number of eligible pages out of available page records for each evaluated attempt. Missing/failed/profile-mismatched attempts remain gaps. The contributing pages can vary between deployments; the chart states this rather than implying a fixed page cohort.
 
 ### Page measurements
 
@@ -146,6 +148,10 @@ A partial run can therefore contribute its eligible completed pages to this aver
 ### Trusted history
 
 `buildTrend()` requires a stricter complete run, ready ingestion, a complete page result, explicitly consistent samples, and an exact nonempty profile-fingerprint match. Page identity includes ID, path, locale, and available Sitecore site/item identity. Environment separation comes from the server's deployment query.
+
+`buildOverallTrend()` applies the same run/device/profile checks and computes an unweighted arithmetic mean of eligible page scores using `runSummary()`. It includes all available page identities/locales in that attempt, excluding incomplete pages, missing scores, and inconsistent or unknown-consistency samples. A page contributes once per run: overlapping records in `historyPages` and `pages` are deduplicated by run ID, page ID, path, and locale, with richer current-deployment records taking precedence. It never averages devices, attempts, or deployments together. A run with no eligible pages produces a gap. The chart uses available records within the API's documented query limits; it does not fetch every unmeasured website URL or claim fixed page coverage.
+
+Device cards can show eligible pages from a partial run; both history charts intentionally require a complete run. A completed selected attempt's overall average uses the same page eligibility and arithmetic as its device card.
 
 An unsuccessful latest attempt does not fall back to an older successful attempt for the same deployment. Ineligible measurements produce gaps; the chart does not connect through them. Hiding consistency labels does not remove these quality checks.
 

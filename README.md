@@ -6,7 +6,7 @@ Chartwell Manager is a Next.js + Supabase admin console for managing residence-s
 - Authenticates staff with Supabase Auth (email/password + OTP).
 - Manages residence records and the documents used by the chatbot.
 - Tracks visitors, chat sessions, messages, and source citations for analytics.
-- Shows website performance scores, per-page trends, and deployment changes from a separate Supabase project.
+- Shows website performance scores, overall and per-page trends, and deployment changes from a separate Supabase project.
 - Allows admins to manage team access levels and delete visitor data.
 
 ## How it works
