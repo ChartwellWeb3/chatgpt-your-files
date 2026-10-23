@@ -39,6 +39,7 @@
   ],
   "exclude": [
     "node_modules",
-    "supabase/functions"
+    "supabase/functions",
+    "infrastructure/performance/supabase/functions"
   ]
 }

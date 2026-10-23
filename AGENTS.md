@@ -15,6 +15,9 @@ npm run test:watch    # Run tests in watch mode
 npm run test:coverage # Run tests with V8 coverage (output: coverage/index.html)
 npm run test:ui       # Open Vitest interactive UI (http://localhost:51204)
 npm run gen:types     # Regenerate Supabase TypeScript types into supabase/functions/_lib/database.ts
+npm run gen:types:performance # Generate types from the separate local performance database after its schema exists
+npm run supabase:chatbot -- <command>     # CLI for the original project (workdir: .)
+npm run supabase:performance -- <command> # CLI for the new project (workdir: infrastructure/performance)
 ```
 
 ## Architecture
@@ -33,10 +36,12 @@ npm run gen:types     # Regenerate Supabase TypeScript types into supabase/funct
 app/                          # Next.js App Router pages and API routes
   api/                        # API route handlers
     analytics/                # Analytics data endpoints
+    performance/              # Website performance API; authenticates against the original project
     chat/                     # Prompt testing and analyzer testing
     sitecore/                 # Sitecore residence selector integration
   auth/callback/              # Supabase auth code exchange
   chat-bot-analytics/         # Analytics pages and section components
+  chartwell-website-performance/ # Lighthouse dashboard, page trends, deployment changes
   chatbot-content-management/ # Document/residence management
   chatbot-prompt-testing/     # Prompt testing UI
   const/userLevels.tsx        # Access level definitions and allowed route prefixes
@@ -45,14 +50,14 @@ app/                          # Next.js App Router pages and API routes
   login/                      # Login page and server actions
   team/                       # Team management page
   types/types.ts              # Shared TypeScript types
-  utils/supabase/             # Supabase SSR client helpers (client.ts, server.ts)
+  utils/supabase/             # Original auth/chatbot clients + performance-server.ts for the new project
 components/                   # Shared UI components
   NavLink/                    # Navigation components
   LoginForm/
   LogoutButton/
   ui/                         # shadcn/ui primitives
 lib/                          # Shared library code (providers, utils, chatbot prompts)
-supabase/
+supabase/                     # ORIGINAL project: Auth, chatbot data/content, chatbot analytics
   functions/                  # Deno Edge Functions
     analyze-conversations/    # AI conversation analysis job
     conversation-durations/   # Duration computation job
@@ -61,11 +66,36 @@ supabase/
     search-vector/            # Vector search
     _lib/                     # Shared library (database types, markdown parser)
   migrations/                 # SQL migration files (timestamped)
+infrastructure/performance/   # NEW project: website performance data only
+  README.md                   # Setup, project ownership, CLI and cutover instructions
+  supabase/
+    config.toml               # Independent local configuration and ports
+    migrations/               # Reserved for performance migrations; no SQL created yet
+    functions/                # Reserved for future performance ingestion functions
 tests/                        # Vitest test files mirroring app/ structure
 ```
 
 ### Path alias
 `@` maps to the project root (configured in `vitest.config.ts` and `tsconfig.json`).
+
+## Two Supabase projects
+
+The same Next.js application uses two separate Supabase projects:
+
+| Project | Owns | Clients and configuration |
+| --- | --- | --- |
+| Original chatbot project | Login, Auth users, profiles/access levels, all chatbot data and analytics, residences, documents, Storage, existing chatbot jobs | `app/utils/supabase/client.ts`, `server.ts`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_DB_URL`; CLI root `supabase/` |
+| New website performance project | `performance_deployments`, `performance_runs`, `performance_page_results`, `performance_deployment_commits`, future performance ingestion | Server-only `app/utils/supabase/performance-server.ts`, `PERFORMANCE_SUPABASE_URL`, `PERFORMANCE_SUPABASE_SECRET_KEY`; CLI root `infrastructure/performance/supabase/` |
+
+- Keep the existing public Supabase environment variables pointing to the original project. All chatbot analytics remain there.
+- `/api/performance` must verify the user's session with the original cookie-based server client before creating or querying the performance client. All signed-in application users may view performance.
+- The performance client uses a server secret, bypasses RLS, and never receives the viewer's cookies or access token. Authorization belongs in the API. Never import this client into browser code, prefix its secret with `NEXT_PUBLIC_`, or return its credentials to the browser.
+- Missing performance configuration returns a private `503` setup error. The performance client must never fall back to the original project; using the same project origin is rejected.
+- Users and profiles do not need to be copied to the new project. Future performance SQL must not depend on profiles, `auth.uid()` policies for original-project users, or foreign keys into the original database.
+- Reuse the existing dashboard components and `/api/performance` response format. Browser code fetches the API rather than querying the new project directly.
+- Each app deployment has one website performance environment, configured with the server-only `PERFORMANCE_ENVIRONMENT` variable (`qa` or `prod`). `getPerformanceEnvironment()` in `performance-server.ts` supplies the server-rendered dashboard prop and the API's deployment/history filter. The UI shows a static badge; there is no environment dropdown. The API ignores a request's `environment` parameter. Missing/invalid values return a setup state instead of defaulting to DEV.
+- The new project's migrations/functions folders are scaffolding only. No performance migration, data copy, or ingestion function has been created or deployed. Inspect the actual performance schema before creating its initial migration.
+- See `infrastructure/performance/README.md` for setup and the remaining cutover work. The user creates the hosted project and configures credentials.
 
 ## Access levels
 
@@ -75,7 +105,9 @@ Defined in [app/const/userLevels.tsx](app/const/userLevels.tsx). Access is contr
 |-------|------|--------|
 | 1 | Admin | Full access, team management, delete visitor data, all API routes |
 | 2 | Content Team | Content management + analytics + prompt testing |
-| 3 | Basic | Analytics and team pages only |
+| 3 | Basic | Analytics, website performance, and team pages only |
+
+Website performance and `/api/performance` are allowed for all three user levels.
 
 ## Key database tables
 
@@ -99,7 +131,7 @@ Key views:
 
 ## Supabase Edge Functions
 
-All functions live in `supabase/functions/` and run as Deno processes:
+Existing chatbot functions live in the original project's `supabase/functions/` and run as Deno processes. Future performance functions belong in `infrastructure/performance/supabase/functions/` and must target the new project:
 
 | Function | Purpose |
 |----------|---------|
@@ -119,6 +151,9 @@ Copy `.env.local.example` to `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_DB_URL=              # postgresql://USER:PASSWORD@HOST:PORT/DB
+PERFORMANCE_SUPABASE_URL=     # NEW project URL; server only
+PERFORMANCE_SUPABASE_SECRET_KEY= # NEW project sb_secret_... key; server only (legacy service_role supported)
+PERFORMANCE_ENVIRONMENT=qa    # qa on the QA app deployment, prod on production; required
 OPENAI_API_KEY=
 OPENAI_ANALYSIS_MODEL=        # e.g. gpt-5.6-luna
 SITECORE_GRAPHQL_ENDPOINT=    # https://your-host/api/graphql/v1
@@ -126,6 +161,10 @@ SITECORE_EDGE_CONTEXT_ID=     # optional, sent as sc_apikey
 SITECORE_GQL_TOKEN=           # optional, sent as X-GQL-TOKEN
 SITECORE_RESIDENCE_DATASOURCE=# Sitecore datasource path
 ```
+
+The first three Supabase variables remain assigned to the original chatbot project. Performance credentials are read lazily by `/api/performance`; other features do not require them. Runtime environment variables do not select the CLI migration target. Each CLI workdir must be linked separately to the appropriate hosted project.
+
+`PERFORMANCE_ENVIRONMENT` must match the stored `performance_deployments.environment` value. It selects the dashboard's data environment, while the performance URL/key select the database project. The page reads the value on the server at request time and passes only the environment label to the browser.
 
 ## Sitecore integration
 
@@ -135,6 +174,10 @@ SITECORE_RESIDENCE_DATASOURCE=# Sitecore datasource path
 
 ## Migration discipline
 
+- Maintain independent migration histories: `supabase/migrations/` for the original project and `infrastructure/performance/supabase/migrations/` for the new performance project.
+- Use `npm run supabase:chatbot -- <command>` or `npm run supabase:performance -- <command>` so the target workdir is explicit. Link each setup to its own project reference; do not relink the original setup to deploy performance changes.
+- Never copy the entire chatbot migration history into the performance setup or move applied migration files out of the original history. The new project will receive an initial migration containing its actual performance schema and dependencies only.
+- Review pending migrations with `db push --dry-run` for the intended setup before deployment. The initial performance migration and historical data transfer are separate future tasks.
 - **Never edit a migration that has already been applied** (`supabase db push` or applied via dashboard). Once pushed, a migration file is immutable history.
 - To change an already-applied function or schema, create a new timestamped migration (`YYYYMMDDHHMMSS_description.sql`) using `create or replace function` or `alter table`.
 - Migration filenames follow the pattern: `20260406130000_add_analytics_booker_profile.sql`.

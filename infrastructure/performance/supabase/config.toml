@@ -1,0 +1,49 @@
+# Independent local setup for the NEW website performance project.
+# This is a local stack name, not the hosted project reference. Link this setup
+# with: npm run supabase:performance -- link --project-ref NEW_PROJECT_REF
+project_id = "chartwell-website-performance"
+
+[api]
+enabled = true
+port = 25431
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 25432
+shadow_port = 25430
+# Match the hosted project's PostgreSQL major version before local development.
+major_version = 17
+
+[db.seed]
+enabled = false
+
+[db.pooler]
+enabled = false
+
+[realtime]
+enabled = false
+
+[studio]
+enabled = true
+port = 25433
+api_url = "http://127.0.0.1"
+
+[inbucket]
+enabled = false
+
+# Users sign in through the original chatbot project. These flags configure
+# local services only; they do not change settings on the hosted project.
+[auth]
+enabled = false
+
+[storage]
+enabled = false
+
+[analytics]
+enabled = false
+
+# Enable when an actual performance ingestion function is added.
+[edge_runtime]
+enabled = false

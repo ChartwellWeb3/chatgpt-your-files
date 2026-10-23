@@ -6,6 +6,7 @@ Chartwell Manager is a Next.js + Supabase admin console for managing residence-s
 - Authenticates staff with Supabase Auth (email/password + OTP).
 - Manages residence records and the documents used by the chatbot.
 - Tracks visitors, chat sessions, messages, and source citations for analytics.
+- Shows website performance scores, per-page trends, and deployment changes from a separate Supabase project.
 - Allows admins to manage team access levels and delete visitor data.
 
 ## How it works
@@ -14,6 +15,24 @@ Chartwell Manager is a Next.js + Supabase admin console for managing residence-s
 - Content management uploads files to the `files` storage bucket and lists documents from the `documents_with_storage_path` view.
 - Supabase Edge Functions process documents into sections and generate embeddings for search.
 - Analytics pages query visitor/session/message tables and show a replay view with source citations.
+- Website performance requests authenticate with the original project, then query the separate performance project through `/api/performance`.
+
+## Supabase projects
+
+The application keeps one login and uses two databases:
+
+| Project | Data | Configuration |
+| --- | --- | --- |
+| Original chatbot project | Auth, profiles, chatbot conversations and analytics, content, documents, Storage, existing jobs | Existing `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_DB_URL`; `supabase/` |
+| New performance project | Website deployments, Lighthouse attempts, page results, deployment commits | Server-only `PERFORMANCE_SUPABASE_URL`, `PERFORMANCE_SUPABASE_SECRET_KEY`; `infrastructure/performance/supabase/` |
+
+Keep the existing public Supabase values assigned to the original project. Every signed-in application user can view website performance through the API; the new project does not need a second set of users.
+
+The separate configuration and empty migration/function folders are prepared. The hosted project, initial schema migration, historical data transfer, and ingestion destination still need to be set up. See the [performance project setup](infrastructure/performance/README.md).
+
+Until performance credentials are configured, its API returns a setup error. It does not query performance tables in the old project as a fallback. The rest of the application keeps using the original project.
+
+Each app deployment shows one performance environment: set the server-only `PERFORMANCE_ENVIRONMENT=qa` on QA and `PERFORMANCE_ENVIRONMENT=prod` on production. The dashboard displays a fixed environment badge, and its deployment/history queries use that value. There is no environment dropdown or DEV fallback. The value must match the environment stored by performance ingestion; the performance URL/key still select the database project.
 
 ## App routes
 - `/` landing page; redirects authenticated users to content management.
@@ -22,7 +41,7 @@ Chartwell Manager is a Next.js + Supabase admin console for managing residence-s
 - `/auth/callback` Supabase auth code exchange.
 - `/chatbot-content-management` residences + document management.
 - `/chat-bot-analytics` visitor/session analytics + conversation replay.
-- `/user-data-tracker` placeholder page (not implemented yet).
+- `/chartwell-website-performance` Lighthouse performance dashboard, page trends, and deployment history. See the [dashboard README](app/chartwell-website-performance/README.md) for data flow, calculations, and visible/hidden fields.
 - `/team` team access management.
 - `/not-authorized` access fallback for restricted routes.
 
@@ -109,6 +128,8 @@ Helpful view:
 1. Copy `.env.local.example` to `.env.local` and fill in Supabase values.
 2. Install dependencies and run the dev server.
 
+Use the original project's values for login/chatbot configuration. Add the new project's server-only performance values when it exists; creating its schema is a separate step. Never put the performance secret in a `NEXT_PUBLIC_` variable.
+
 ```bash
 npm install
 npm run dev
@@ -121,6 +142,9 @@ npm run dev
 - `npm run typecheck`: run TypeScript checks across the app and tests.
 - `npm run ci`: run the local CI gate (`typecheck`, tests, production build).
 - `npm run gen:types`: regenerate Supabase types in `supabase/functions/_lib/database.ts`.
+- `npm run gen:types:performance`: generate the separate local performance schema's types in `infrastructure/performance/database.types.ts`, after its schema exists.
+- `npm run supabase:chatbot -- <command>`: use the original project's Supabase CLI setup.
+- `npm run supabase:performance -- <command>`: use the new performance project's Supabase CLI setup. The folders have independent project links and migration histories.
 - `npm test`: run the full automated test suite once.
 - `npm run test:watch`: run tests in watch mode.
 - `npm run test:coverage`: run tests with a V8 coverage report (`coverage/index.html`).
