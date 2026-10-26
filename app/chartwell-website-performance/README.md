@@ -15,7 +15,8 @@ Each app deployment displays one environment from the server-only **`PERFORMANCE
 | `performance-commits.tsx` | Previous/current deployment identities, added/removed commits, message search, and expandable messages. |
 | `performance-score.tsx` | Performance-specific score ring and score value, using the shared badge primitive. |
 | `performance-format.ts` | Link validation and status formatting. Some comparison/consistency text helpers remain available for future use but are not rendered in the current UI. |
-| [`../../lib/performance.ts`](../../lib/performance.ts) | Schema types, metric definitions, formatting, aggregation, trend eligibility, and commit normalization. |
+| [`../../lib/performance.ts`](../../lib/performance.ts) | Schema types, metric definitions, formatting, device-card aggregation, and commit normalization. |
+| [`../../infrastructure/performance/sql/performance-trends.sql`](../../infrastructure/performance/sql/performance-trends.sql) | SQL Editor installation script for overall/page trend aggregation and measurement compatibility. |
 | [`../../lib/performance-client.ts`](../../lib/performance-client.ts) | Browser fetch helper for `/api/performance`, including JSON and session/error handling. |
 | [`../api/performance/route.ts`](../api/performance/route.ts) | Authenticated, read-only Supabase queries. |
 | [`../utils/supabase/performance-server.ts`](../utils/supabase/performance-server.ts) | Server-only performance client and environment configuration, with separate credentials, no user session, and explicit setup errors. |
@@ -54,12 +55,13 @@ The attempt selector permits inspection of older attempts from the same deployme
 
 The chart currently plots **Score / 100 only**. LCP, TBT, CLS, FCP, and Speed Index remain available in the page table and samples, but are not selectable chart metrics.
 
-The overview chart shows the **overall average of eligible page scores for each deployment**. It has mobile/desktop controls and no page picker. An “All measured pages” badge identifies its scope. A chart inside expanded page details stays fixed to that page's identity, locale, and device, showing its individual score. Both reuse the same component and already-fetched history. Each chart also offers:
+The overview chart shows the **overall average of eligible page scores for each deployment**. It has mobile/desktop controls and no page picker. An “All measured pages” badge identifies its scope. A chart inside expanded page details stays fixed to that page's identity, locale, and device, showing its individual score. Both reuse the same component and fetch calculated points from Supabase through the authenticated API. Each chart also offers:
 
-- A measurement-profile selector, preventing silent mixing of incompatible settings.
+- A reference-profile selector. Supabase compares the underlying settings instead of requiring identical full fingerprints.
 - A latest trusted value and a count of trusted points/gaps.
 - Hover details with build number, score, and timestamp. Overall averages also show how many page scores contributed.
 - **View values**, an optional table explaining included points and gaps.
+- A visible explanation when deployments are excluded.
 
 Dates on the chart come from deployment completion, falling back to deployment creation when necessary. A deployment contributes at most one point for the selected device. For the currently selected deployment, the explicitly selected attempt is used; for other deployments, the newest attempt is used. Reruns do not create additional deployment points.
 
@@ -147,9 +149,11 @@ A partial run can therefore contribute its eligible completed pages to this aver
 
 ### Trusted history
 
-`buildTrend()` requires a stricter complete run, ready ingestion, a complete page result, explicitly consistent samples, and an exact nonempty profile-fingerprint match. Page identity includes ID, path, locale, and available Sitecore site/item identity. Environment separation comes from the server's deployment query.
+`performance_page_trend()` and `performance_overall_trend()` run in the performance database. Both require a complete run, ready ingestion, explicitly consistent samples, and comparable measurement settings. Page identity includes ID, path, locale, and available Sitecore site/item identity. The API supplies its configured environment, and SQL verifies that reference/selected attempts belong to that environment and device.
 
-`buildOverallTrend()` applies the same run/device/profile checks and computes an unweighted arithmetic mean of eligible page scores using `runSummary()`. It includes all available page identities/locales in that attempt, excluding incomplete pages, missing scores, and inconsistent or unknown-consistency samples. A page contributes once per run: overlapping records in `historyPages` and `pages` are deduplicated by run ID, page ID, path, and locale, with richer current-deployment records taking precedence. It never averages devices, attempts, or deployments together. A run with no eligible pages produces a gap. The chart uses available records within the API's documented query limits; it does not fetch every unmeasured website URL or claim fixed page coverage.
+Compatibility includes the profile name, schema version, mode, device profile, full measurement configuration, authentication configuration, and toolchain. Only the Node minor/patch version is normalized away; its major version is retained. Lighthouse, Chromium, throttling, sampling, and other toolchain/settings changes remain distinct. Incomplete summary metadata falls back to an exact nonempty fingerprint; unknown settings are never assumed compatible. This avoids gaps caused solely by a collector's Node update, such as `v24.11.1` to `v24.22.1`.
+
+The overall RPC calculates an unweighted arithmetic mean of eligible page scores directly from the stored rows for one attempt. Scalar scores take precedence, with a numeric JSON aggregate fallback. Scores must be in 0–100; zero is valid. There is no browser history-row limit or duplicate downloaded history to affect this average. The page RPC uses the same eligibility rules for one matching page. Neither combines devices, attempts, or deployments. A run with no eligible pages produces a gap. Contributing pages can vary across deployments; there is no fixed-cohort claim.
 
 Device cards can show eligible pages from a partial run; both history charts intentionally require a complete run. A completed selected attempt's overall average uses the same page eligibility and arithmetic as its device card.
 
@@ -178,9 +182,15 @@ The browser uses TanStack React Query and `/api/performance`. Each request first
 4. Fetch measurement attempts for the selected deployment, newest creation first.
 5. Fetch metric columns and selected JSON projections (`aggregate`, `comparison`, `insights`, `identity`) for those attempts.
 6. Fetch deployment commits and historical run metadata.
-7. Fetch lightweight historical page rows for the latest attempt per deployment/device in batches. The selected deployment's page rows are also available for inspecting its other returned attempts.
+7. Return historical run metadata for the reference-profile selector. `historyPages` remains an empty array for response compatibility; charts request calculated points separately.
 
 The overview does not fetch every run's full `summary` or every page's full `result` JSON. Dates filter source completion; rows with no source completion date are excluded when a date boundary is applied.
+
+### Trend request
+
+`GET /api/performance?view=trend&device=mobile&deploymentIds=UUID,UUID&referenceRunId=UUID&selectedRunId=UUID`
+
+Add `pageId=...` for the expanded page chart. After original-project authentication and input validation, the API calls `performance_overall_trend` or `performance_page_trend` in the performance project. The browser receives `{ points }`, with one value or explicit gap reason per deployment. The deployment list comes from the date-filtered overview and is limited to 100 distinct UUIDs; SQL enforces the configured environment again. The page target's path, locale, and Sitecore identity are read in SQL from the selected attempt rather than supplied by the browser. Missing SQL functions return `PERFORMANCE_TRENDS_NOT_INSTALLED` while the rest of the dashboard remains usable.
 
 ### Page-detail request
 
@@ -199,10 +209,11 @@ The authenticated endpoint still supports explicit inspection of one stored summ
 - Overview query key: environment, selected deployment, and dates.
 - Overview stale time: **30 seconds**; automatic window-focus refetch is disabled.
 - Expanded page-result stale time: **60 seconds**, keyed by run/page/path/locale.
-- Refresh reloads the overview/history query; it does not invalidate every cached page detail.
+- Trend query key: deployment IDs, device, reference run, selected run, and optional page ID; stale time **30 seconds**, no automatic focus refetch.
+- Refresh reloads the overview and invalidates active trend queries; it does not invalidate every cached page detail.
 - Browser fetches and API responses use `no-store`; authenticated responses are private.
 - Maximum **100 deployments**, **100 attempts for the selected deployment**, **1,000 selected-deployment page rows**, and **1,000 normalized commit rows** per overview request.
-- History uses up to **500 run metadata rows**, with page queries in batches of **40 run IDs**, capped at **1,000 page rows per batch**.
+- The profile selector uses up to **500 run metadata rows**. Trend SQL evaluates all stored page rows for the chosen attempts across the returned deployments, independently of that selector's limit.
 - Query-limit or partial-history notices are returned when limits are reached. These are bounded data windows, not unlimited server pagination; narrow the dates to inspect another window.
 
 ## Available information intentionally not displayed
@@ -217,7 +228,7 @@ Hidden UI is presentation scope, not an authorization boundary. Some hidden fiel
 | Baseline measurement/deployment IDs and `firstBaseline` | `result.comparison` | Retained but not shown. Stored score deltas can still appear next to page scores when eligible. |
 | Timing/CLS comparison deltas | `result.comparison.metrics` | Available when ingestion supplies them, but not rendered. |
 | Per-metric minimum/maximum ranges | `result.aggregate.range` | Not shown; there are no range labels or green spread bars. |
-| Timing/CLS history | Lightweight historical page metric columns | Fetched and supported by the shared trend helper, but the current charts plot only Score / 100. |
+| Timing/CLS history | Stored historical page metric columns | The trend RPCs currently return Score / 100 only. |
 | Representative-run reference | `result.representativeRun` | Not displayed or mapped to a sample index. |
 | Sitecore identity fields and original page URL | `result.identity`, `result.url` | Identity supports grouping; raw site/item IDs and page-result URL are not shown. The deployment's site link remains visible. |
 | Sample-level opportunities | `result.runs[].insights` | Stored in the fetched result; the opportunity list displays page-level `result.insights` only. |
@@ -241,7 +252,7 @@ Performance queries use `PERFORMANCE_SUPABASE_URL` and `PERFORMANCE_SUPABASE_SEC
 
 Missing/invalid environment configuration, missing credentials, an invalid performance URL, or a performance URL using the original project's origin returns a private `503` response with `kind: "configuration"` and `code: "PERFORMANCE_NOT_CONFIGURED"`. Credentials are read at request time so unrelated pages keep working before the new project is configured. There is no fallback to performance tables in the original project, and no second login or copied profiles are required.
 
-The independent CLI configuration and empty migration/function folders are under `infrastructure/performance/`. See the [project setup README](../../infrastructure/performance/README.md). No schema migration or historical data transfer is included in this preparation. Configuring environment variables alone does not create the four required tables or redirect the CI collector.
+The independent CLI configuration and migration/function folders are under `infrastructure/performance/`. See the [project setup README](../../infrastructure/performance/README.md). Run the additive [trend SQL](../../infrastructure/performance/sql/performance-trends.sql) in the existing performance database before deploying this chart update. It installs functions only; it does not create/copy the four existing tables or redirect the collector. A complete initial schema migration and historical data transfer remain separate work.
 
 Missing schema or permissions produce an error state rather than preview measurements. Unavailable historical queries can leave the selected deployment visible with an availability notice. An unreadable normalized commit table can fall back to embedded deployment changes. No visible deployment rows produce an honest empty state, including QA/PROD before ingestion. Missing device measurements, page results, detailed JSON, insights, and trusted chart points each have explicit empty states.
 

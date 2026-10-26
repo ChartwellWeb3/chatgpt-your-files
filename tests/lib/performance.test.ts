@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import about from "../fixtures/performance/about.json";
 import summary from "../fixtures/performance/summary.json";
-import { buildTrend, comparisonLabel, deploymentCommits, formatBytes, formatDate, formatMetric, metricValue, pageRange, runSummary, scoreDelta, type PageResult, type PerformanceDeployment, type PerformancePage, type PerformancePayload, type PerformanceRun } from "@/lib/performance";
+import { comparisonLabel, deploymentCommits, formatBytes, formatDate, formatMetric, metricValue, pageRange, runSummary, scoreDelta, type PageResult, type PerformanceDeployment, type PerformancePage, type PerformanceRun } from "@/lib/performance";
 
 const page: PerformancePage = { run_id: "mobile-current", page_id: "about", page_name: "About us", page_path: "/about-us", locale: "en", status: "complete", performance_score: null, lcp_ms: null, tbt_ms: null, cls: null, fcp_ms: null, speed_index_ms: null, noisy: false, result: about as PageResult };
 const deployment = (id: string, date: string): PerformanceDeployment => ({ id, created_at: date, source_finished_at: date, source_build_number: id, source_branch: "cw-dev", source_build_url: null, commit_sha: null, deployment_url: null, environment: "dev", deployment_changes: null });
@@ -34,25 +34,6 @@ describe("performance dashboard data", () => {
     expect(result.noisy).toBe(1);
     expect(runSummary({ ...current, status: "failed" }, [page]).score).toBeNull();
     expect(runSummary({ ...current, upload_status: "pending" }, [page]).score).toBeNull();
-  });
-  it("keeps a gap when the latest run failed and never silently uses an older successful attempt", () => {
-    const payload: PerformancePayload = { deployments: [deployment("new", "2026-10-21T16:00:00Z"), deployment("old", "2026-10-20T16:00:00Z")], deployment: null, runs: [], pages: [], commits: [], historyRuns: [run("latest", "new", { status: "failed" }), run("retry", "new", { created_at: "2026-10-21T18:00:00Z" }), run("old-mobile", "old")], historyPages: [{ ...page, run_id: "retry" }, { ...page, run_id: "old-mobile", performance_score: 75 }] };
-    const points = buildTrend(payload, page, "mobile", "profile-a", "score");
-    expect(points).toHaveLength(2);
-    expect(points[0].value).toBe(75);
-    expect(points[1].value).toBeNull();
-    expect(points[1].reason).toMatch(/incomplete/);
-  });
-  it("never mixes device, locale, identity or profile and excludes noise/unfinished uploads", () => {
-    const payload: PerformancePayload = { deployments: [deployment("new", "2026-10-21T16:00:00Z")], deployment: null, runs: [], pages: [], commits: [], historyRuns: [run("current"), run("desktop", "new", { device: "desktop" })], historyPages: [{ ...page, run_id: "current" }, { ...page, run_id: "desktop", performance_score: 100 }] };
-    expect(buildTrend(payload, page, "mobile", "profile-a", "score")[0].value).toBe(87);
-    expect(buildTrend(payload, page, "mobile", "another-profile", "score")[0].value).toBeNull();
-    expect(buildTrend(payload, { ...page, locale: "fr" }, "mobile", "profile-a", "score")[0].value).toBeNull();
-    payload.historyPages[0].noisy = true;
-    expect(buildTrend(payload, page, "mobile", "profile-a", "score")[0].value).toBeNull();
-    payload.historyPages[0].noisy = false;
-    payload.historyRuns[0].upload_status = "pending";
-    expect(buildTrend(payload, page, "mobile", "profile-a", "score")[0].value).toBeNull();
   });
   it("uses embedded deployment_changes and deduplicates normalized commit rows", () => {
     const dep = { ...deployment("new", "2026-10-21T16:00:00Z"), deployment_changes: summary.deploymentChanges };
