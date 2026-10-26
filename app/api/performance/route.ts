@@ -5,7 +5,6 @@ import { createPerformanceClient, getPerformanceEnvironment, PerformanceConfigur
 const deploymentColumns = "id,environment,source_build_number,source_branch,source_build_url,source_finished_at,commit_sha,vercel_deployment_id,deployment_url,base_url,deployment_changes,created_at";
 const runColumns = "id,deployment_id,device,monitoring_build_id,monitoring_build_url,report_artifact_name,profile_fingerprint,status,started_at,finished_at,error_message,upload_status,created_at";
 const pageColumns = "run_id,page_id,page_name,page_path,locale,status,performance_score,lcp_ms,tbt_ms,cls,fcp_ms,speed_index_ms,noisy,error_message,aggregate:result->aggregate,comparison:result->comparison,insights:result->insights,identity:result->identity";
-const historyColumns = "run_id,page_id,page_name,page_path,locale,status,performance_score,lcp_ms,tbt_ms,cls,fcp_ms,speed_index_ms,noisy,identity:result->identity";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fail = (error: { message: string; code?: string }) => NextResponse.json({ error: error.message, code: error.code, kind: "database" }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
 
@@ -35,6 +34,35 @@ export async function GET(request: Request) {
   }
   const params = new URL(request.url).searchParams;
   const view = params.get("view");
+  if (view === "trend") {
+    const device = params.get("device");
+    const referenceRunId = params.get("referenceRunId");
+    const selectedRunId = params.get("selectedRunId");
+    const deploymentIds = Array.from(new Set((params.get("deploymentIds") ?? "").split(",").filter(Boolean)));
+    const pageId = params.get("pageId");
+    if (!referenceRunId || !uuid.test(referenceRunId) || (selectedRunId && !uuid.test(selectedRunId))
+      || !deploymentIds.length || deploymentIds.length > 100 || deploymentIds.some((id) => !uuid.test(id))
+      || (device !== "mobile" && device !== "desktop")
+      || (params.has("pageId") && (!pageId?.trim() || !selectedRunId))) {
+      return NextResponse.json({ error: "Invalid trend measurements or deployments." }, { status: 400 });
+    }
+    const args = {
+      p_environment: environment,
+      p_deployment_ids: deploymentIds,
+      p_device: device,
+      p_reference_run_id: referenceRunId,
+      p_selected_run_id: selectedRunId || null,
+    };
+    const { data, error } = pageId
+      ? await supabase.rpc("performance_page_trend", { ...args, p_page_id: pageId })
+      : await supabase.rpc("performance_overall_trend", args);
+    if (error?.code === "PGRST202" || error?.code === "42883") {
+      return NextResponse.json({ error: "Performance trends need to be configured in the performance database.", code: "PERFORMANCE_TRENDS_NOT_INSTALLED", kind: "configuration" }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
+    }
+    if (error?.code === "22023") return NextResponse.json({ error: error.message }, { status: 400, headers: { "Cache-Control": "private, no-store" } });
+    if (error) return fail(error);
+    return NextResponse.json({ points: data ?? [] }, { headers: { "Cache-Control": "private, no-store" } });
+  }
   if (view === "summary" || view === "page") {
     const runId = params.get("runId");
     if (!runId || !uuid.test(runId)) return NextResponse.json({ error: "Invalid measurement ID." }, { status: 400 });
@@ -92,22 +120,8 @@ export async function GET(request: Request) {
 
   const ids = (deployments ?? []).map((deployment) => deployment.id);
   const { data: historyRuns, error: historyError } = await supabase.from("performance_runs").select(runColumns).in("deployment_id", ids).order("created_at", { ascending: false }).limit(500);
-  let historyPages: unknown[] = [...pages];
   if (historyError) warnings.push("Historical measurements could not be loaded: " + historyError.message);
-  if (historyRuns?.length === 500) warnings.push("Trend history is limited to the latest 500 measurement attempts.");
-  const latestAttempts = new Map<string, string>();
-  for (const run of historyRuns ?? []) {
-    const key = `${run.deployment_id}:${run.device}`;
-    if (!latestAttempts.has(key)) latestAttempts.set(key, run.id);
-  }
-  const historyRunIds = Array.from(latestAttempts.values());
-  // Separate batches stay below PostgREST's row cap without loading full results.
-  for (let offset = 0; offset < historyRunIds.length; offset += 40) {
-    const { data, error } = await supabase.from("performance_page_results").select(historyColumns).in("run_id", historyRunIds.slice(offset, offset + 40)).order("page_name").limit(1000);
-    if (error) { warnings.push("Some historical page results are unavailable: " + error.message); break; }
-    historyPages = historyPages.concat(data ?? []);
-    if (data?.length === 1000) warnings.push("A historical result batch reached its query limit. Narrow the date range for complete history.");
-  }
-  return NextResponse.json({ deployments, deployment: selected, runs: runs ?? [], pages, commits: commits ?? [], commitsUnavailable: !!commitsError, historyRuns: historyRuns ?? [], historyPages, warnings: Array.from(new Set(warnings)) }, { headers: { "Cache-Control": "private, no-store" } });
+  if (historyRuns?.length === 500) warnings.push("The profile selector lists the latest 500 attempts. Trend calculations still cover every deployment in this range.");
+  return NextResponse.json({ deployments, deployment: selected, runs: runs ?? [], pages, commits: commits ?? [], commitsUnavailable: !!commitsError, historyRuns: historyRuns ?? [], historyPages: [], warnings: Array.from(new Set(warnings)) }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
