@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, AlertCircle, ArrowDown, ArrowUp, ArrowUpRight, ChevronLeft, ChevronRight, Clock3, Database, GitBranch, GitCompareArrows, Info, Layers, ListFilter, Monitor, RefreshCw, Search, Smartphone } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import { safeLink, statusTone } from "./performance-format";
 const EMPTY: PerformancePayload = { deployments: [], deployment: null, runs: [], pages: [], commits: [], historyRuns: [], historyPages: [] };
 
 export default function PerformanceDashboard({ environment }: { environment: PerformanceEnvironment }) {
+  const queryClient = useQueryClient();
   const [deploymentId, setDeploymentId] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -72,7 +73,7 @@ export default function PerformanceDashboard({ environment }: { environment: Per
   return <div className="mx-auto w-full max-w-[1500px] space-y-6 px-4 py-6 sm:px-6 lg:px-10 lg:py-9">
     <header className="flex items-start justify-between gap-4">
       <div><div className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[.18em] text-emerald-300"><Activity className="h-3.5 w-3.5"/>Chartwell · Website monitoring</div><h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Chartwell website performance</h1><p className="mt-2 text-sm text-muted-foreground">See what changed, find slow pages, and follow performance across deployments.</p></div>
-      <Button variant="outline" size="sm" onClick={() => void query.refetch()} disabled={query.isFetching} aria-label="Refresh performance data" className="shrink-0 gap-2"><RefreshCw className={cn("h-3.5 w-3.5", query.isFetching && "animate-spin")}/><span className="hidden sm:inline">Refresh data</span></Button>
+      <Button variant="outline" size="sm" onClick={() => { void query.refetch(); void queryClient.invalidateQueries({ queryKey: ["performance-trend"] }); }} disabled={query.isFetching} aria-label="Refresh performance data" className="shrink-0 gap-2"><RefreshCw className={cn("h-3.5 w-3.5", query.isFetching && "animate-spin")}/><span className="hidden sm:inline">Refresh data</span></Button>
     </header>
 
     <Card><CardContent className="flex flex-wrap items-end gap-4 p-4">

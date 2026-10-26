@@ -93,10 +93,6 @@ export function formatDate(value?: string | null, dateOnly = false) {
   if (!value || !Number.isFinite(Date.parse(value))) return "—";
   return new Intl.DateTimeFormat("en-CA", dateOnly ? { month: "short", day: "numeric", timeZone: "America/Toronto" } : { dateStyle: "medium", timeStyle: "short", timeZone: "America/Toronto" }).format(new Date(value)) + (dateOnly ? "" : " ET");
 }
-export function pageIdentity(page: PerformancePage) {
-  const identity = page.identity ?? page.result?.identity;
-  return JSON.stringify([page.page_id, page.page_path, page.locale ?? "", identity?.site ?? "", identity?.itemId ?? ""]);
-}
 export const pageRowId = (page: PerformancePage) => JSON.stringify([page.run_id, page.page_id, page.page_path, page.locale]);
 export const pageComparison = (page: PerformancePage) => page.comparison ?? page.result?.comparison;
 export const pageRange = (page: PerformancePage) => (page.aggregate ?? page.result?.aggregate)?.range;
@@ -118,48 +114,7 @@ export function runSummary(run: PerformanceRun | undefined, pages: PerformancePa
   return { rows, measured: complete.length, total: rows.length, noisy: rows.filter(isNoisy).length, failures: rows.filter((p) => p.status === "failed").length,
     regressions: rows.filter(isRegression).length, included: valid.length, score: valid.length ? valid.reduce((sum, p) => sum + metricValue(p, "score")!, 0) / valid.length : null };
 }
-export type TrendPoint = { deploymentId: string; runId?: string; date: string; build: string; value: number | null; reason?: string; includedPages?: number; totalPages?: number };
-function buildDeploymentTrend(payload: PerformancePayload, device: Device, fingerprint: string, selectedRun: PerformanceRun | undefined, measure: (run: PerformanceRun) => Pick<TrendPoint, "value" | "reason" | "includedPages" | "totalPages">): TrendPoint[] {
-  return [...payload.deployments].reverse().map((deployment) => {
-    const candidates = payload.historyRuns.filter((r) => r.deployment_id === deployment.id && r.device === device).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-    const run = selectedRun?.deployment_id === deployment.id && selectedRun.device === device ? selectedRun : candidates[0];
-    const point: TrendPoint = { deploymentId: deployment.id, runId: run?.id, date: deployment.source_finished_at ?? deployment.created_at, build: deployment.source_build_number ?? deployment.commit_sha?.slice(0, 8) ?? deployment.id.slice(0, 8), value: null };
-    if (!run) return { ...point, reason: "No measurement" };
-    if (!fingerprint || run.profile_fingerprint !== fingerprint) return { ...point, reason: "Different or unknown measurement profile" };
-    if (run.upload_status !== "ready" || run.status !== "complete") return { ...point, reason: "Audit or ingestion incomplete" };
-    return { ...point, ...measure(run) };
-  }).sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
-}
-export function buildTrend(payload: PerformancePayload, target: PerformancePage, device: Device, fingerprint: string, metric: MetricKey, selectedRun?: PerformanceRun): TrendPoint[] {
-  const identity = pageIdentity(target);
-  return buildDeploymentTrend(payload, device, fingerprint, selectedRun, (run) => {
-    const page = payload.historyPages.find((p) => p.run_id === run.id && pageIdentity(p) === identity);
-    if (!page || page.status !== "complete") return { value: null, reason: "Page not measured successfully" };
-    if (isNoisy(page) !== false) return { value: null, reason: isNoisy(page) ? "Inconsistent samples" : "Sample consistency not reported" };
-    return { value: metricValue(page, metric) };
-  });
-}
-export function buildOverallTrend(payload: PerformancePayload, device: Device, fingerprint: string, selectedRun?: PerformanceRun): TrendPoint[] {
-  // The API includes selected-deployment pages in both arrays. Each page must
-  // contribute once; richer current-deployment rows take precedence.
-  const uniquePages = new Map([...payload.historyPages, ...payload.pages].map((page) => [pageRowId(page), page]));
-  const pagesByRun = new Map<string, PerformancePage[]>();
-  for (const page of Array.from(uniquePages.values())) {
-    const pages = pagesByRun.get(page.run_id) ?? [];
-    pages.push(page);
-    pagesByRun.set(page.run_id, pages);
-  }
-  return buildDeploymentTrend(payload, device, fingerprint, selectedRun, (run) => {
-    const pages = pagesByRun.get(run.id) ?? [];
-    const summary = runSummary(run, pages);
-    return {
-      value: summary.score,
-      includedPages: summary.included,
-      totalPages: summary.total,
-      ...(summary.score === null ? { reason: pages.length ? "No complete, consistent page scores" : "Page measurements unavailable" } : {}),
-    };
-  });
-}
+export type TrendPoint = { deploymentId: string; runId?: string | null; date: string; build: string; value: number | null; reason?: string | null; includedPages?: number; totalPages?: number };
 export function deploymentCommits(deployment: PerformanceDeployment, rows: PerformanceCommit[], direction: "added" | "removed"): PerformanceCommit[] {
   const embedded = direction === "added" ? deployment.deployment_changes?.commits : deployment.deployment_changes?.removedCommits;
   const normalized = (embedded ?? []).map((c, position) => ({ deployment_id: deployment.id, commit_sha: c.sha, short_sha: c.shortSha ?? c.sha.slice(0, 8), message: c.message, author: c.author ?? null, authored_at: c.authoredAt ?? null, azure_url: c.url ?? null, direction, position }));
