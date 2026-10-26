@@ -104,7 +104,7 @@ describe("performance API", () => {
     db.rpc.mockResolvedValue({ data: null, error: { code: "PGRST202", message: "Function missing" } });
     const response = await GET(new Request(trendUrl));
     expect(response.status).toBe(503);
-    expect(await response.json()).toMatchObject({ code: "PERFORMANCE_TRENDS_NOT_INSTALLED", kind: "configuration" });
+    expect(await response.json()).toMatchObject({ code: "PERFORMANCE_FUNCTIONS_NOT_INSTALLED", kind: "configuration" });
   });
   it("returns validation and database failures without fabricating points", async () => {
     const db = client();
@@ -112,5 +112,39 @@ describe("performance API", () => {
     expect((await GET(new Request(trendUrl))).status).toBe(400);
     db.rpc.mockResolvedValue({ data: null, error: { code: "42501", message: "Permission denied" } });
     expect((await GET(new Request(trendUrl))).status).toBe(503);
+  });
+  const pagesUrl = `http://localhost/api/performance?view=pages&runIds=${runId}`;
+  it("authenticates before page searches", async () => {
+    const db = client(null);
+    expect((await GET(new Request(pagesUrl))).status).toBe(401);
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
+  it("delegates page filtering, sorting, and pagination to the performance database", async () => {
+    const db = client();
+    const data = { pages: [{ page_id: "home" }], total: 25, page: 1, pageSize: 8 };
+    db.rpc.mockResolvedValue({ data, error: null });
+    const response = await GET(new Request(pagesUrl + "&device=desktop&search=home&sort=lcp&direction=desc&page=1&environment=prod"));
+    expect(db.rpc).toHaveBeenCalledWith("performance_page_results_page", {
+      p_environment: "qa", p_run_ids: [runId], p_device: "desktop", p_search: "home", p_sort: "lcp", p_ascending: false, p_page: 1, p_page_size: 8,
+    });
+    expect(await response.json()).toEqual(data);
+    expect(db.from).not.toHaveBeenCalled();
+  });
+  it("validates table filters before calling SQL", async () => {
+    const db = client();
+    for (const suffix of ["&device=tablet", "&sort=invalid", "&direction=up", "&page=-1", "&page=1.5", `&search=${"x".repeat(201)}`]) {
+      expect((await GET(new Request(pagesUrl + suffix))).status).toBe(400);
+    }
+    expect((await GET(new Request(pagesUrl.replace(runId, "bad")))).status).toBe(400);
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
+  it("loads run summaries instead of downloading all page results for the overview", async () => {
+    const db = client({ id: "viewer" }, [{ id: deploymentId }]);
+    const runSummaries = { [deploymentId]: { total: 80, included: 75, score: 70 } };
+    db.rpc.mockResolvedValue({ data: runSummaries, error: null });
+    const response = await GET(new Request("http://localhost/api/performance"));
+    expect(db.rpc).toHaveBeenCalledWith("performance_run_summaries", { p_environment: "qa", p_run_ids: [deploymentId] });
+    expect(db.from).not.toHaveBeenCalledWith("performance_page_results");
+    expect(await response.json()).toMatchObject({ runSummaries, pages: [], historyPages: [] });
   });
 });

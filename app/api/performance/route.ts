@@ -4,9 +4,13 @@ import { createPerformanceClient, getPerformanceEnvironment, PerformanceConfigur
 
 const deploymentColumns = "id,environment,source_build_number,source_branch,source_build_url,source_finished_at,commit_sha,vercel_deployment_id,deployment_url,base_url,deployment_changes,created_at";
 const runColumns = "id,deployment_id,device,monitoring_build_id,monitoring_build_url,report_artifact_name,profile_fingerprint,status,started_at,finished_at,error_message,upload_status,created_at";
-const pageColumns = "run_id,page_id,page_name,page_path,locale,status,performance_score,lcp_ms,tbt_ms,cls,fcp_ms,speed_index_ms,noisy,error_message,aggregate:result->aggregate,comparison:result->comparison,insights:result->insights,identity:result->identity";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fail = (error: { message: string; code?: string }) => NextResponse.json({ error: error.message, code: error.code, kind: "database" }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
+const rpcFail = (error: { message: string; code?: string }) => {
+  if (error.code === "PGRST202" || error.code === "42883") return NextResponse.json({ error: "Install the performance dashboard SQL functions in the performance database.", code: "PERFORMANCE_FUNCTIONS_NOT_INSTALLED", kind: "configuration" }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
+  if (error.code === "22023") return NextResponse.json({ error: error.message }, { status: 400, headers: { "Cache-Control": "private, no-store" } });
+  return fail(error);
+};
 
 function torontoMidnight(day: string) {
   // Toronto's offset at 05:00 UTC is the offset at the start of this local day,
@@ -56,12 +60,28 @@ export async function GET(request: Request) {
     const { data, error } = pageId
       ? await supabase.rpc("performance_page_trend", { ...args, p_page_id: pageId })
       : await supabase.rpc("performance_overall_trend", args);
-    if (error?.code === "PGRST202" || error?.code === "42883") {
-      return NextResponse.json({ error: "Performance trends need to be configured in the performance database.", code: "PERFORMANCE_TRENDS_NOT_INSTALLED", kind: "configuration" }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
-    }
-    if (error?.code === "22023") return NextResponse.json({ error: error.message }, { status: 400, headers: { "Cache-Control": "private, no-store" } });
-    if (error) return fail(error);
+    if (error) return rpcFail(error);
     return NextResponse.json({ points: data ?? [] }, { headers: { "Cache-Control": "private, no-store" } });
+  }
+  if (view === "pages") {
+    const runIds = Array.from(new Set((params.get("runIds") ?? "").split(",").filter(Boolean)));
+    const device = params.get("device") ?? "all";
+    const search = params.get("search") ?? "";
+    const sort = params.get("sort") ?? "score";
+    const direction = params.get("direction") ?? "asc";
+    const page = params.get("page") ?? "0";
+    if (!runIds.length || runIds.length > 2 || runIds.some((id) => !uuid.test(id))
+      || !["all", "mobile", "desktop"].includes(device) || search.length > 200
+      || !["score", "lcp", "tbt", "cls", "fcp", "speedIndex"].includes(sort)
+      || !["asc", "desc"].includes(direction) || !/^\d{1,6}$/.test(page)) {
+      return NextResponse.json({ error: "Invalid page filters or measurements." }, { status: 400 });
+    }
+    const { data, error } = await supabase.rpc("performance_page_results_page", {
+      p_environment: environment, p_run_ids: runIds, p_device: device, p_search: search,
+      p_sort: sort, p_ascending: direction === "asc", p_page: Number(page), p_page_size: 8,
+    });
+    if (error) return rpcFail(error);
+    return NextResponse.json(data, { headers: { "Cache-Control": "private, no-store" } });
   }
   if (view === "summary" || view === "page") {
     const runId = params.get("runId");
@@ -98,7 +118,7 @@ export async function GET(request: Request) {
   const { data: deployments, error: deploymentsError } = await query;
   if (deploymentsError) return fail(deploymentsError);
   const selected = deploymentId ? deployments?.find((d) => d.id === deploymentId) : deployments?.[0];
-  const empty = { deployments: deployments ?? [], deployment: null, runs: [], pages: [], commits: [], historyRuns: [], historyPages: [] };
+  const empty = { deployments: deployments ?? [], deployment: null, runs: [], pages: [], runSummaries: {}, commits: [], historyRuns: [], historyPages: [] };
   if (!selected) return NextResponse.json(empty, { headers: { "Cache-Control": "private, no-store" } });
   const warnings: string[] = [];
   if (deployments?.length === 100) warnings.push("Showing the 100 most recent deployments in this range. Narrow the dates to inspect older deployments.");
@@ -107,12 +127,11 @@ export async function GET(request: Request) {
   if (runsError) return fail(runsError);
   if (runs?.length === 100) warnings.push("The latest 100 attempts for this deployment are shown.");
   const runIds = (runs ?? []).map((run) => run.id);
-  let pages: unknown[] = [];
+  let runSummaries = {};
   if (runIds.length) {
-    const { data, error } = await supabase.from("performance_page_results").select(pageColumns).in("run_id", runIds).order("page_name").limit(1000);
-    if (error) return fail(error);
-    pages = data ?? [];
-    if (pages.length === 1000) warnings.push("The page list reached its query limit. Select a newer deployment to reduce the attempt count.");
+    const { data, error } = await supabase.rpc("performance_run_summaries", { p_environment: environment, p_run_ids: runIds });
+    if (error) return rpcFail(error);
+    runSummaries = data ?? {};
   }
   const { data: commits, error: commitsError } = await supabase.from("performance_deployment_commits").select("deployment_id,commit_sha,short_sha,message,author,authored_at,azure_url,direction,position").eq("deployment_id", selected.id).order("position").limit(1000);
   // Embedded deployment_changes is also a supported source of commit history.
@@ -122,6 +141,6 @@ export async function GET(request: Request) {
   const { data: historyRuns, error: historyError } = await supabase.from("performance_runs").select(runColumns).in("deployment_id", ids).order("created_at", { ascending: false }).limit(500);
   if (historyError) warnings.push("Historical measurements could not be loaded: " + historyError.message);
   if (historyRuns?.length === 500) warnings.push("The profile selector lists the latest 500 attempts. Trend calculations still cover every deployment in this range.");
-  return NextResponse.json({ deployments, deployment: selected, runs: runs ?? [], pages, commits: commits ?? [], commitsUnavailable: !!commitsError, historyRuns: historyRuns ?? [], historyPages: [], warnings: Array.from(new Set(warnings)) }, { headers: { "Cache-Control": "private, no-store" } });
+  return NextResponse.json({ deployments, deployment: selected, runs: runs ?? [], pages: [], runSummaries, commits: commits ?? [], commitsUnavailable: !!commitsError, historyRuns: historyRuns ?? [], historyPages: [], warnings: Array.from(new Set(warnings)) }, { headers: { "Cache-Control": "private, no-store" } });
 }
 

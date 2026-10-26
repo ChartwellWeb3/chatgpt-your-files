@@ -15,7 +15,7 @@ async function run(n: number, deployment: number, summary: unknown = settings(),
   await db.query("insert into performance_runs values ($1,$2,$3,$4,$5,$6,$7,$8)", [id(n), id(deployment), device, status, upload, `fingerprint-${n}`, summary, `2026-10-26T${String(n % 24).padStart(2, "0")}:00:00Z`]);
 }
 async function page(n: number, score: number | null, pageId = "home-en", noisy: boolean | null = false, status = "complete", result: unknown = {}, locale = "en", path = "/") {
-  await db.query("insert into performance_page_results values ($1,$2,$3,$4,$5,$6,$7,$8)", [id(n), pageId, path, locale, status, score, noisy, result]);
+  await db.query("insert into performance_page_results (run_id,page_id,page_path,locale,status,performance_score,noisy,result,page_name) values ($1,$2,$3,$4,$5,$6,$7,$8,$2)", [id(n), pageId, path, locale, status, score, noisy, result]);
 }
 async function trend(pageId?: string, selected = 13, reference = 13, device = "mobile") {
   const name = pageId === undefined ? "performance_overall_trend" : "performance_page_trend";
@@ -32,7 +32,7 @@ describe("Supabase performance trend SQL", () => {
       create role anon; create role authenticated; create role service_role;
       create table performance_deployments (id uuid primary key, environment text, source_finished_at timestamptz, created_at timestamptz, source_build_number text, commit_sha text);
       create table performance_runs (id uuid primary key, deployment_id uuid references performance_deployments, device text, status text, upload_status text, profile_fingerprint text, summary jsonb, created_at timestamptz);
-      create table performance_page_results (run_id uuid references performance_runs, page_id text, page_path text, locale text, status text, performance_score numeric, noisy boolean, result jsonb, primary key(run_id, page_id));
+      create table performance_page_results (run_id uuid references performance_runs, page_id text, page_name text, page_path text, locale text, status text, performance_score numeric, lcp_ms numeric, tbt_ms numeric, cls numeric, fcp_ms numeric, speed_index_ms numeric, noisy boolean, error_message text, result jsonb, primary key(run_id, page_id));
     `);
     const sql = await readFile(new URL("../../infrastructure/performance/sql/performance-trends.sql", import.meta.url), "utf8");
     await db.exec(sql);
@@ -123,5 +123,68 @@ describe("Supabase performance trend SQL", () => {
   it("restricts RPC execution to the service role", async () => {
     const { rows } = await db.query<{ allowed: boolean }>("select has_function_privilege('anon', 'public.performance_overall_trend(text,uuid[],text,uuid,uuid)', 'execute') as allowed union all select has_function_privilege('authenticated', 'public.performance_page_trend(text,uuid[],text,uuid,uuid,text)', 'execute') union all select has_function_privilege('service_role', 'public.performance_page_trend(text,uuid[],text,uuid,uuid,text)', 'execute')");
     expect(rows.map((r) => r.allowed)).toEqual([false, false, true]);
+  });
+  async function summaries(runIds = [13]) {
+    const { rows } = await db.query<{ data: Record<string, { total: number; included: number; noisy: number; failures: number; score: number | null }> }>("select performance_run_summaries('qa',$1) as data", [runIds.map(id)]);
+    return rows[0].data;
+  }
+  type PageList = { total: number; page: number; pageSize: number; pages: { page_id: string; performance_score: number | null; lcp_ms: number | null; score_delta: number | null; available: boolean }[] };
+  async function pageList(options: { runs?: number[]; search?: string; device?: string; sort?: string; asc?: boolean; page?: number } = {}) {
+    const { rows } = await db.query<{ data: PageList }>("select performance_page_results_page('qa',$1,$2,$3,$4,$5,$6,8) as data", [(options.runs ?? [13]).map(id), options.device ?? "all", options.search ?? "", options.sort ?? "score", options.asc ?? true, options.page ?? 0]);
+    return rows[0].data;
+  }
+  it("computes device summaries from every stored row independently of the paginated table", async () => {
+    for (let n = 0; n < 25; n++) await page(13, 20, `page-${n}`);
+    await page(13, 100, "noisy", true); await page(13, 100, "failed", false, "failed");
+    const summary = (await summaries())[id(13)];
+    expect(summary).toMatchObject({ total: 28, included: 26, noisy: 1, failures: 1 });
+    expect(summary.score).toBeCloseTo(560 / 26);
+    expect((await pageList()).pages).toHaveLength(8);
+    expect((await pageList()).total).toBe(28);
+  });
+  it("keeps summaries for partial runs, but excludes failed runs and unready uploads", async () => {
+    await db.query("update performance_runs set status='partial' where id=$1", [id(13)]);
+    expect((await summaries())[id(13)].score).toBe(60);
+    await db.query("update performance_runs set upload_status='pending' where id=$1", [id(13)]);
+    expect((await summaries())[id(13)].score).toBeNull();
+    await db.query("update performance_runs set status='failed',upload_status='ready' where id=$1", [id(13)]);
+    expect((await summaries())[id(13)].score).toBeNull();
+  });
+  it("paginates deterministically, sorts over all rows, and keeps missing values last in both directions", async () => {
+    for (let n = 0; n < 18; n++) await page(13, n * 3, `page-${String(n).padStart(2, "0")}`);
+    await page(13, null, "missing");
+    const first = await pageList(); const second = await pageList({ page: 1 }); const last = await pageList({ page: 999 });
+    expect(first.pages.map((p) => p.performance_score)).toEqual([0, 3, 6, 9, 12, 15, 18, 21]);
+    expect(second.pages[0].performance_score).toBe(24);
+    expect(new Set([...first.pages, ...second.pages].map((p) => p.page_id)).size).toBe(16);
+    expect(last).toMatchObject({ page: 2, total: 20 });
+    expect(last.pages.at(-1)?.performance_score).toBeNull();
+    expect((await pageList({ asc: false })).pages[0].performance_score).toBe(60);
+    expect((await pageList({ asc: false, page: 2 })).pages.at(-1)?.performance_score).toBeNull();
+  });
+  it("filters all rows by literal search text and device without treating wildcard input as SQL", async () => {
+    await page(13, 1, "Search_100%", false, "complete", {}, "fr", "/fr/special");
+    expect((await pageList({ search: "SEARCH_100%" })).total).toBe(1);
+    expect((await pageList({ search: "fr/special" })).pages[0].page_id).toBe("Search_100%");
+    expect((await pageList({ search: "' OR true --" })).total).toBe(0);
+    await run(23, 3, settings(), "desktop"); await page(23, 99);
+    expect((await pageList({ runs: [13, 23], device: "desktop" })).pages[0].performance_score).toBe(99);
+  });
+  it("normalizes JSON metrics and returns only eligible stored score deltas without full report JSON", async () => {
+    await page(13, null, "json", false, "complete", { aggregate: { metrics: { score: 0, lcp: 1234 } }, comparison: { metrics: { score: { delta: -5 } } }, runs: [{ content: "large" }] });
+    const row = (await pageList({ search: "json" })).pages[0];
+    expect(row).toMatchObject({ performance_score: 0, lcp_ms: 1234, score_delta: -5, available: true });
+    expect(row).not.toHaveProperty("result");
+    await db.query("update performance_page_results set noisy=true where run_id=$1", [id(13)]);
+    expect((await pageList({ search: "json" })).pages[0].score_delta).toBeNull();
+    await db.query("update performance_runs set status='failed' where id=$1", [id(13)]);
+    expect((await pageList({ search: "json" })).pages[0]).toMatchObject({ available: false, performance_score: null, lcp_ms: null, score_delta: null });
+  });
+  it("keeps summaries and page searches inside the requested environment, with clean empty results", async () => {
+    await run(14, 4); await page(14, 100);
+    expect(await summaries([14])).toEqual({});
+    expect(await pageList({ runs: [14], page: 10 })).toEqual({ total: 0, page: 0, pageSize: 8, pages: [] });
+    await expect(pageList({ sort: "score; drop table performance_runs" })).rejects.toThrow(/Invalid page/);
+    await expect(pageList({ runs: [11, 12, 13] })).rejects.toThrow(/Invalid page/);
   });
 });

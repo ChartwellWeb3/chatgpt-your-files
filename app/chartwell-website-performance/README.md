@@ -84,7 +84,7 @@ The table shows these columns:
 | FCP | First Contentful Paint: time until the first content is rendered. |
 | Speed Index | How quickly visible content fills in during page loading. |
 
-Search matches the page name, path, and locale. Device filtering is local to the returned records. Metric columns support ascending/descending sorting, with missing values last. The table paginates locally at **8 rows per page** and defaults to the lowest scores first.
+Search matches the page name, path, and locale. Search, device filtering, ascending/descending metric sorting, total counts, and pagination run in Supabase through `performance_page_results_page`. Missing metrics sort last in both directions, with stable identity tie-breakers. The table fetches **8 rows per page** and defaults to the lowest scores first. Search is debounced by 250 ms and requests are cancellable. SQL clamps out-of-range page numbers after data changes.
 
 Only rows from the selected mobile/desktop attempts are shown. Full results are fetched only when a row is expanded. Sample-consistency and comparison columns, their popovers, and the result-status filter are intentionally hidden.
 
@@ -137,7 +137,7 @@ The table displays measurements only when the page is complete, ingestion is rea
 
 ### Device average
 
-`runSummary()` averages only pages that:
+`performance_run_summaries()` averages only pages that:
 
 - Belong to the selected attempt.
 - Have page status `complete`.
@@ -145,7 +145,7 @@ The table displays measurements only when the page is complete, ingestion is rea
 - Are explicitly marked non-noisy/consistent.
 - Belong to a run with ready ingestion that is not failed.
 
-A partial run can therefore contribute its eligible completed pages to this average. The average is `null` when there are no eligible pages, and the ring shows `—`. Mobile and desktop averages are never combined.
+A partial run can therefore contribute its eligible completed pages to this average. The average is `null` when there are no eligible pages, and the ring shows `—`. Mobile and desktop averages are never combined. Summaries use every stored page for the requested attempts; downloading or filtering the table does not change the ring. The same RPC computes total, measured, included, noisy, failed, and regression counts.
 
 ### Trusted history
 
@@ -180,9 +180,9 @@ The browser uses TanStack React Query and `/api/performance`. Each request first
 2. Validate optional UUID and dates.
 3. Fetch deployments for the configured environment, newest completion first, then creation time.
 4. Fetch measurement attempts for the selected deployment, newest creation first.
-5. Fetch metric columns and selected JSON projections (`aggregate`, `comparison`, `insights`, `identity`) for those attempts.
+5. Call `performance_run_summaries` for those attempts; return compact numeric summaries rather than downloading their page rows.
 6. Fetch deployment commits and historical run metadata.
-7. Return historical run metadata for the reference-profile selector. `historyPages` remains an empty array for response compatibility; charts request calculated points separately.
+7. Return historical run metadata for the reference-profile selector. `pages` and `historyPages` remain empty arrays for response compatibility; charts and the paginated table request calculated data separately.
 
 The overview does not fetch every run's full `summary` or every page's full `result` JSON. Dates filter source completion; rows with no source completion date are excluded when a date boundary is applied.
 
@@ -190,7 +190,13 @@ The overview does not fetch every run's full `summary` or every page's full `res
 
 `GET /api/performance?view=trend&device=mobile&deploymentIds=UUID,UUID&referenceRunId=UUID&selectedRunId=UUID`
 
-Add `pageId=...` for the expanded page chart. After original-project authentication and input validation, the API calls `performance_overall_trend` or `performance_page_trend` in the performance project. The browser receives `{ points }`, with one value or explicit gap reason per deployment. The deployment list comes from the date-filtered overview and is limited to 100 distinct UUIDs; SQL enforces the configured environment again. The page target's path, locale, and Sitecore identity are read in SQL from the selected attempt rather than supplied by the browser. Missing SQL functions return `PERFORMANCE_TRENDS_NOT_INSTALLED` while the rest of the dashboard remains usable.
+Add `pageId=...` for the expanded page chart. After original-project authentication and input validation, the API calls `performance_overall_trend` or `performance_page_trend` in the performance project. The browser receives `{ points }`, with one value or explicit gap reason per deployment. The deployment list comes from the date-filtered overview and is limited to 100 distinct UUIDs; SQL enforces the configured environment again. The page target's path, locale, and Sitecore identity are read in SQL from the selected attempt rather than supplied by the browser. Missing SQL functions return the private setup error `PERFORMANCE_FUNCTIONS_NOT_INSTALLED`.
+
+### Page-table request
+
+`GET /api/performance?view=pages&runIds=UUID,UUID&device=all&search=...&sort=score&direction=asc&page=0`
+
+The API authenticates with the original project, validates at most two attempt UUIDs and an allowlist of metrics/devices/directions, then calls `performance_page_results_page` with the configured environment and a page size of eight. SQL returns `{ pages, total, page, pageSize }`. It resolves scalar/JSON metric fallbacks, excludes unavailable metrics from display, and includes a stored `score_delta` only when the page/run/ingestion/consistency rules permit it. It does not recompute the collector's baseline comparison. Search is a literal case-insensitive substring, including `%` and `_`; SQL is never composed from browser input. The response omits full result JSON and unused aggregate, insight, comparison, and identity payloads.
 
 ### Page-detail request
 
@@ -212,7 +218,7 @@ The authenticated endpoint still supports explicit inspection of one stored summ
 - Trend query key: deployment IDs, device, reference run, selected run, and optional page ID; stale time **30 seconds**, no automatic focus refetch.
 - Refresh reloads the overview and invalidates active trend queries; it does not invalidate every cached page detail.
 - Browser fetches and API responses use `no-store`; authenticated responses are private.
-- Maximum **100 deployments**, **100 attempts for the selected deployment**, **1,000 selected-deployment page rows**, and **1,000 normalized commit rows** per overview request.
+- Maximum **100 deployments**, **100 attempts for the selected deployment**, and **1,000 normalized commit rows** per overview request. Page rows are fetched separately, eight at a time, without the old 1,000-row cap on counts/averages.
 - The profile selector uses up to **500 run metadata rows**. Trend SQL evaluates all stored page rows for the chosen attempts across the returned deployments, independently of that selector's limit.
 - Query-limit or partial-history notices are returned when limits are reached. These are bounded data windows, not unlimited server pagination; narrow the dates to inspect another window.
 

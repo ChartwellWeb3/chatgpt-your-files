@@ -1,6 +1,7 @@
 -- Run this entire script in the WEBSITE PERFORMANCE project's SQL Editor.
 -- Requires the existing performance_deployments, performance_runs, and
 -- performance_page_results tables. It does not alter stored measurements.
+-- Installs overall/page trends, device summaries, and paginated page queries.
 begin;
 
 create or replace function public.performance_measurement_key(p_summary jsonb, p_fingerprint text)
@@ -127,9 +128,7 @@ begin
         count(*) filter (where p.status = 'complete' and p.consistent is null) as unknown_consistency_pages
       from (
         select page.status, public.performance_page_score(page.performance_score, page.result) as score,
-          not coalesce(page.noisy, case
-            when jsonb_typeof(page.result->'aggregate'->'noisy') = 'boolean'
-            then (page.result->'aggregate'->>'noisy')::boolean end) as consistent
+          public.performance_page_consistency(page.noisy, page.result) as consistent
         from public.performance_page_results page
         where page.run_id = a.run_id and (
           p_page_id is null or exists (
@@ -195,6 +194,138 @@ begin
 end;
 $$;
 
+create or replace function public.performance_metric_value(p_value numeric, p_fallback jsonb)
+returns numeric
+language sql immutable parallel safe
+set search_path = ''
+as $$
+  select case
+    when p_value is not null then case when p_value::text not in ('NaN', 'Infinity', '-Infinity') then p_value end
+    when jsonb_typeof(p_fallback) = 'number' then (p_fallback #>> '{}')::numeric
+  end;
+$$;
+
+create or replace function public.performance_page_consistency(p_noisy boolean, p_result jsonb)
+returns boolean
+language sql immutable parallel safe
+set search_path = ''
+as $$
+  select not coalesce(p_noisy, case when jsonb_typeof(p_result->'aggregate'->'noisy') = 'boolean'
+    then (p_result->'aggregate'->>'noisy')::boolean end);
+$$;
+
+create or replace function public.performance_run_summaries(p_environment text, p_run_ids uuid[])
+returns jsonb
+language plpgsql stable security invoker
+set search_path = ''
+as $$
+begin
+  if p_environment is null or p_environment not in ('qa', 'prod')
+    or p_run_ids is null or cardinality(p_run_ids) > 100 then
+    raise exception 'Invalid summary environment or measurements' using errcode = '22023';
+  end if;
+  return (
+    with runs as (
+      select r.* from public.performance_runs r
+      join public.performance_deployments d on d.id = r.deployment_id
+      where d.environment = p_environment and r.id = any(p_run_ids)
+    ), summaries as (
+      select r.id, count(p.page_id) as total,
+        count(p.page_id) filter (where p.status = 'complete') as measured,
+        count(p.page_id) filter (where public.performance_page_consistency(p.noisy, p.result) = false) as noisy,
+        count(p.page_id) filter (where p.status = 'failed') as failures,
+        count(p.page_id) filter (where p.result->'comparison'->>'classification' ~* 'regress') as regressions,
+        count(p.page_id) filter (where p.status = 'complete' and public.performance_page_consistency(p.noisy, p.result)
+          and r.upload_status = 'ready' and r.status <> 'failed'
+          and public.performance_page_score(p.performance_score, p.result) is not null) as included,
+        avg(public.performance_page_score(p.performance_score, p.result)) filter (
+          where p.status = 'complete' and public.performance_page_consistency(p.noisy, p.result)
+            and r.upload_status = 'ready' and r.status <> 'failed') as score
+      from runs r left join public.performance_page_results p on p.run_id = r.id
+      group by r.id, r.upload_status, r.status
+    )
+    select coalesce(jsonb_object_agg(s.id::text, to_jsonb(s) - 'id'), '{}'::jsonb) from summaries s
+  );
+end;
+$$;
+
+create or replace function public.performance_page_results_page(
+  p_environment text, p_run_ids uuid[], p_device text default 'all',
+  p_search text default '', p_sort text default 'score', p_ascending boolean default true,
+  p_page integer default 0, p_page_size integer default 8
+)
+returns jsonb
+language plpgsql stable security invoker
+set search_path = ''
+as $$
+begin
+  if p_environment is null or p_environment not in ('qa', 'prod')
+    or p_run_ids is null or cardinality(p_run_ids) not between 1 and 2
+    or p_device is null or p_device not in ('all', 'mobile', 'desktop')
+    or p_sort is null or p_sort not in ('score', 'lcp', 'tbt', 'cls', 'fcp', 'speedIndex')
+    or p_ascending is null or p_search is null or length(p_search) > 200
+    or p_page is null or p_page < 0 or p_page_size is null or p_page_size not between 1 and 100 then
+    raise exception 'Invalid page filters or pagination' using errcode = '22023';
+  end if;
+  return (
+    with normalized as (
+      select p.run_id, p.page_id, p.page_name, p.page_path, p.locale, p.status, p.error_message,
+        public.performance_page_consistency(p.noisy, p.result) as consistent,
+        p.status = 'complete' and r.upload_status = 'ready' and r.status <> 'failed' as available,
+        public.performance_page_score(p.performance_score, p.result) as performance_score,
+        public.performance_metric_value(p.lcp_ms, p.result->'aggregate'->'metrics'->'lcp') as lcp_ms,
+        public.performance_metric_value(p.tbt_ms, p.result->'aggregate'->'metrics'->'tbt') as tbt_ms,
+        public.performance_metric_value(p.cls, p.result->'aggregate'->'metrics'->'cls') as cls,
+        public.performance_metric_value(p.fcp_ms, p.result->'aggregate'->'metrics'->'fcp') as fcp_ms,
+        public.performance_metric_value(p.speed_index_ms, p.result->'aggregate'->'metrics'->'speedIndex') as speed_index_ms,
+        coalesce(
+          public.performance_metric_value(null, p.result->'comparison'->'metrics'->'score'->'delta'),
+          public.performance_metric_value(null, p.result->'comparison'->'metricDeltas'->'score'),
+          public.performance_metric_value(null, p.result->'comparison'->'metricDeltas'->'performance_score'),
+          public.performance_metric_value(null, p.result->'comparison'->'scoreDelta')
+        ) as score_delta
+      from public.performance_page_results p
+      join public.performance_runs r on r.id = p.run_id
+      join public.performance_deployments d on d.id = r.deployment_id
+      where d.environment = p_environment and p.run_id = any(p_run_ids)
+        and (p_device = 'all' or r.device = p_device)
+        and (p_search = '' or strpos(lower(concat_ws(' ', p.page_name, p.page_path, p.locale)), lower(p_search)) > 0)
+    ), display_rows as (
+      select n.run_id, n.page_id, n.page_name, n.page_path, n.locale, n.status, n.error_message, n.available,
+        not n.consistent as noisy,
+        case when n.available then n.performance_score end as performance_score,
+        case when n.available then n.lcp_ms end as lcp_ms,
+        case when n.available then n.tbt_ms end as tbt_ms,
+        case when n.available then n.cls end as cls,
+        case when n.available then n.fcp_ms end as fcp_ms,
+        case when n.available then n.speed_index_ms end as speed_index_ms,
+        case when n.available and n.consistent then n.score_delta end as score_delta
+      from normalized n
+    ), ranked as (
+      select d.*, case p_sort
+        when 'score' then d.performance_score when 'lcp' then d.lcp_ms when 'tbt' then d.tbt_ms
+        when 'cls' then d.cls when 'fcp' then d.fcp_ms when 'speedIndex' then d.speed_index_ms end as sort_value
+      from display_rows d
+    ), totals as (
+      select count(*) as total from ranked
+    ), bounds as (
+      select total, least(p_page::bigint, greatest(0, (total - 1) / p_page_size)) as page from totals
+    ), numbered as (
+      select ranked.*, row_number() over (order by
+        case when p_ascending then sort_value end asc nulls last,
+        case when not p_ascending then sort_value end desc nulls last,
+        page_name, page_path, locale nulls first, page_id, run_id) as position
+      from ranked
+    )
+    select jsonb_build_object('total', b.total, 'page', b.page, 'pageSize', p_page_size,
+      'pages', coalesce((select jsonb_agg(to_jsonb(n) - 'sort_value' - 'position' order by n.position)
+        from numbered n where n.position > b.page * p_page_size
+          and n.position <= (b.page + 1) * p_page_size), '[]'::jsonb))
+    from bounds b
+  );
+end;
+$$;
+
 -- Calls go through the application API, after login in the chatbot project.
 revoke all on function public.performance_measurement_key(jsonb, text) from public, anon, authenticated;
 revoke all on function public.performance_page_score(numeric, jsonb) from public, anon, authenticated;
@@ -206,6 +337,14 @@ grant execute on function public.performance_page_score(numeric, jsonb) to servi
 grant execute on function public.performance_trend_points(text, uuid[], text, uuid, uuid, text) to service_role;
 grant execute on function public.performance_overall_trend(text, uuid[], text, uuid, uuid) to service_role;
 grant execute on function public.performance_page_trend(text, uuid[], text, uuid, uuid, text) to service_role;
+revoke all on function public.performance_metric_value(numeric, jsonb) from public, anon, authenticated;
+revoke all on function public.performance_page_consistency(boolean, jsonb) from public, anon, authenticated;
+revoke all on function public.performance_run_summaries(text, uuid[]) from public, anon, authenticated;
+revoke all on function public.performance_page_results_page(text, uuid[], text, text, text, boolean, integer, integer) from public, anon, authenticated;
+grant execute on function public.performance_metric_value(numeric, jsonb) to service_role;
+grant execute on function public.performance_page_consistency(boolean, jsonb) to service_role;
+grant execute on function public.performance_run_summaries(text, uuid[]) to service_role;
+grant execute on function public.performance_page_results_page(text, uuid[], text, text, text, boolean, integer, integer) to service_role;
 
 notify pgrst, 'reload schema';
 commit;
