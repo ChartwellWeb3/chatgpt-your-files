@@ -58,16 +58,15 @@ The chart currently plots **Score / 100 only**. LCP, TBT, CLS, FCP, and Speed In
 The overview chart shows the **overall average of eligible page scores for each deployment**. It has mobile/desktop controls and no page picker. An “All measured pages” badge identifies its scope. A chart inside expanded page details stays fixed to that page's identity, locale, and device, showing its individual score. Both reuse the same component and fetch calculated points from Supabase through the authenticated API. Each chart also offers:
 
 - A reference-profile selector. Supabase compares the underlying settings instead of requiring identical full fingerprints.
-- A latest trusted value and a count of trusted points/gaps.
+- A latest available value and a count of deployments with measurements.
 - Hover details with build number, score, and timestamp. Overall averages also show how many page scores contributed.
-- **View values**, an optional table explaining included points and gaps.
-- A visible explanation when deployments are excluded.
+- **View values**, an optional table of deployment dates, scores, and page counts, without a trust-status column.
 
 Dates on the chart come from deployment completion, falling back to deployment creation when necessary. A deployment contributes at most one point for the selected device. For the currently selected deployment, the explicitly selected attempt is used; for other deployments, the newest attempt is used. Reruns do not create additional deployment points.
 
-The “latest trusted point” may belong to an earlier deployment if the newest measurement is incomplete or unsuitable. It is not substituted into the current deployment's page score.
+The latest available point may belong to an earlier deployment if the newest measurement is incomplete or uses different settings. It is not substituted into the current deployment's page score.
 
-The overview labels its value **Average score / 100** and its summary **latest trusted average**. The optional values table includes the number of eligible pages out of available page records for each evaluated attempt. Missing/failed/profile-mismatched attempts remain gaps. The contributing pages can vary between deployments; the chart states this rather than implying a fixed page cohort.
+The overview labels its value **Average score / 100** and its summary **latest available average**. Both charts include completed page scores even when the collector marks samples noisy or does not report consistency. There are no consistency-status badges, exclusion messages, or warning markers in the charts. The optional values table includes contributing page counts for overall averages; unavailable values display a dash with a tooltip explanation. Missing/failed/profile-mismatched attempts remain gaps. Contributing pages can vary between deployments.
 
 ### Page measurements
 
@@ -147,17 +146,17 @@ The table displays measurements only when the page is complete, ingestion is rea
 
 A partial run can therefore contribute its eligible completed pages to this average. The average is `null` when there are no eligible pages, and the ring shows `—`. Mobile and desktop averages are never combined. Summaries use every stored page for the requested attempts; downloading or filtering the table does not change the ring. The same RPC computes total, measured, included, noisy, failed, and regression counts.
 
-### Trusted history
+### Measurement history
 
-`performance_page_trend()` and `performance_overall_trend()` run in the performance database. Both require a complete run, ready ingestion, explicitly consistent samples, and comparable measurement settings. Page identity includes ID, path, locale, and available Sitecore site/item identity. The API supplies its configured environment, and SQL verifies that reference/selected attempts belong to that environment and device.
+`performance_page_trend()` and `performance_overall_trend()` run in the performance database. Both require a complete run, ready ingestion, completed pages with numeric scores, and comparable measurement settings. They do not filter on sample-consistency flags. Page identity includes ID, path, locale, and available Sitecore site/item identity. The API supplies its configured environment, and SQL verifies that reference/selected attempts belong to that environment and device.
 
 Compatibility includes the profile name, schema version, mode, device profile, full measurement configuration, authentication configuration, and toolchain. Only the Node minor/patch version is normalized away; its major version is retained. Lighthouse, Chromium, throttling, sampling, and other toolchain/settings changes remain distinct. Incomplete summary metadata falls back to an exact nonempty fingerprint; unknown settings are never assumed compatible. This avoids gaps caused solely by a collector's Node update, such as `v24.11.1` to `v24.22.1`.
 
 The overall RPC calculates an unweighted arithmetic mean of eligible page scores directly from the stored rows for one attempt. Scalar scores take precedence, with a numeric JSON aggregate fallback. Scores must be in 0–100; zero is valid. There is no browser history-row limit or duplicate downloaded history to affect this average. The page RPC uses the same eligibility rules for one matching page. Neither combines devices, attempts, or deployments. A run with no eligible pages produces a gap. Contributing pages can vary across deployments; there is no fixed-cohort claim.
 
-Device cards can show eligible pages from a partial run; both history charts intentionally require a complete run. A completed selected attempt's overall average uses the same page eligibility and arithmetic as its device card.
+Device cards retain their stricter consistency checks and can show eligible pages from a partial run; both history charts require a complete run but include variable samples. An overall history average can therefore differ from the device card for the same attempt. The chart's caption identifies that it includes variable samples.
 
-An unsuccessful latest attempt does not fall back to an older successful attempt for the same deployment. Ineligible measurements produce gaps; the chart does not connect through them. Hiding consistency labels does not remove these quality checks.
+An unsuccessful latest attempt does not fall back to an older successful attempt for the same deployment. Unavailable or incompatible measurements produce gaps; the chart does not connect through them. Sample variability alone does not create a gap.
 
 The collector's comparison classification, thresholds, reasons, and baseline IDs remain stored data. This dashboard does not recreate that classification algorithm.
 
@@ -229,7 +228,7 @@ Hidden UI is presentation scope, not an authorization boundary. Some hidden fiel
 | Information | Where it is available | Current treatment |
 | --- | --- | --- |
 | Coverage, regression, failed-page, and inconsistent-page counts | Returned page records and `runSummary()` | Can be derived, but not rendered in device cards. |
-| Sample consistency / noisy flags | `noisy`, `result.aggregate.noisy` | Used to exclude untrusted averages, deltas, and trend points; columns and warning banners are hidden. |
+| Sample consistency / noisy flags | `noisy`, `result.aggregate.noisy` | Still used for device-card averages and stored deltas. History charts include completed scores regardless of these flags. |
 | Lighthouse comparison classifications and reasons | `result.comparison` and overview projection | No comparison column, badge, popover, status filter, or detail panel. |
 | Baseline measurement/deployment IDs and `firstBaseline` | `result.comparison` | Retained but not shown. Stored score deltas can still appear next to page scores when eligible. |
 | Timing/CLS comparison deltas | `result.comparison.metrics` | Available when ingestion supplies them, but not rendered. |

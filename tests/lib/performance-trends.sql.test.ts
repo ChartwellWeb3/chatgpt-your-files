@@ -52,13 +52,13 @@ describe("Supabase performance trend SQL", () => {
     expect((await trend()).map((p) => p.value)).toEqual([40, 50, 60]);
     expect((await trend("home-en")).map((p) => p.value)).toEqual([40, 50, 60]);
   });
-  it("averages complete consistent pages exactly once, retaining zero and JSON-only scores", async () => {
+  it("averages completed pages regardless of consistency, retaining zero and JSON-only scores", async () => {
     await page(13, 0, "zero");
     await page(13, null, "fallback", false, "complete", { aggregate: { metrics: { score: 90 } } });
     await page(13, 100, "noisy", true); await page(13, 100, "failed", false, "failed");
     await page(13, null, "missing"); await page(13, 100, "unknown", null);
     await page(13, null, "bad-json", false, "complete", { aggregate: { metrics: { score: "bad" } } });
-    expect((await trend())[2]).toMatchObject({ value: 50, includedPages: 3, totalPages: 8 });
+    expect((await trend())[2]).toMatchObject({ value: 70, includedPages: 5, totalPages: 8 });
   });
   it.each(["pending", "failed"])("keeps gaps for %s ingestion", async (status) => {
     await db.query("update performance_runs set upload_status=$1 where id=$2", [status, id(12)]);
@@ -98,11 +98,20 @@ describe("Supabase performance trend SQL", () => {
     expect((await trend("home-en"))[1]).toMatchObject({ value: null, reason: "Page identity not measured in this attempt" });
     expect((await trend())[1].value).toBe(50);
   });
-  it("shows noisy pages as gaps and uses JSON consistency when the scalar flag is missing", async () => {
+  it("includes noisy and unknown-consistency pages in history", async () => {
     await db.query("update performance_page_results set noisy=true where run_id=$1", [id(12)]);
-    expect((await trend("home-en"))[1]).toMatchObject({ value: null, reason: "Inconsistent samples" });
-    await db.query("update performance_page_results set noisy=null, result=$1 where run_id=$2", [{ aggregate: { noisy: false } }, id(12)]);
     expect((await trend("home-en"))[1].value).toBe(50);
+    expect((await trend())[1].value).toBe(50);
+    await db.query("update performance_page_results set noisy=null, result='{}' where run_id=$1", [id(12)]);
+    expect((await trend("home-en"))[1].value).toBe(50);
+    expect((await trend())[1].value).toBe(50);
+  });
+  it("shows the floor-plan page's 34, 34, 38 history despite sample variation", async () => {
+    await db.query("update performance_page_results set performance_score=34 where run_id=any($1)", [[id(11), id(12)]]);
+    await db.query("update performance_page_results set performance_score=38 where run_id=$1", [id(13)]);
+    await db.query("update performance_page_results set noisy=true where run_id=any($1)", [[id(12), id(13)]]);
+    expect((await trend("home-en")).map((point) => point.value)).toEqual([34, 34, 38]);
+    expect((await summaries())[id(13)].score).toBeNull();
   });
   it("falls back to exact fingerprints when measurement settings are incomplete", async () => {
     await db.exec("update performance_runs set summary='{}', profile_fingerprint='same'");
