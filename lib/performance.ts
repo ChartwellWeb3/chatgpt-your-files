@@ -22,7 +22,10 @@ export type PerformancePage = {
   cls: number | null; fcp_ms: number | null; speed_index_ms: number | null;
   noisy: boolean | null; error_message?: string | null; result?: PageResult;
   aggregate?: PageResult["aggregate"]; comparison?: Comparison; insights?: Insight[]; identity?: PageResult["identity"];
+  available?: boolean; score_delta?: number | null;
 };
+export type PerformanceRunSummary = { total: number; measured: number; included: number; noisy: number; failures: number; regressions: number; score: number | null };
+export type PerformancePageList = { pages: PerformancePage[]; total: number; page: number; pageSize: number };
 export type PerformanceRun = {
   id: string; deployment_id: string; device: Device; status: string; upload_status: string;
   monitoring_build_id?: string | null; monitoring_build_url?: string | null; report_artifact_name?: string | null;
@@ -65,6 +68,7 @@ export type PerformancePayload = {
   deployments: PerformanceDeployment[]; deployment: PerformanceDeployment | null; runs: PerformanceRun[];
   pages: PerformancePage[]; commits: PerformanceCommit[]; commitsUnavailable?: boolean;
   historyRuns: PerformanceRun[]; historyPages: PerformancePage[]; warnings?: string[];
+  runSummaries?: Record<string, PerformanceRunSummary>;
 };
 
 export const METRICS: { key: MetricKey; label: string; column: keyof PerformancePage; description: string }[] = [

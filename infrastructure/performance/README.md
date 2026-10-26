@@ -24,9 +24,18 @@ Included:
 
 The complete initial schema migration, historical data copy, ingestion function, and collector configuration are outside this setup. Supplying credentials alone does not create the required database tables. The additive trend-function script below targets the existing performance tables inspected through the configured project's API.
 
-## Install performance trend functions
+## Install dashboard calculation functions
 
-Open [sql/performance-trends.sql](sql/performance-trends.sql) and run the entire script in the **website performance project's SQL Editor**, then deploy/restart the updated app. It installs `performance_overall_trend`, `performance_page_trend`, and their shared helpers in one transaction. It is repeatable and does not update/delete measurements. Execute privileges are limited to `service_role`; all viewer requests pass through the app's original-project login check.
+Open [sql/performance-trends.sql](sql/performance-trends.sql) and run the entire script in the **website performance project's SQL Editor**, then deploy/restart the updated app. It installs the dashboard RPCs and their shared helpers in one transaction. It is repeatable and does not update/delete measurements. Execute privileges are limited to `service_role`; all viewer requests pass through the app's original-project login check.
+
+| RPC | Backend work |
+| --- | --- |
+| `performance_overall_trend` | Comparable deployment selection, score averages, coverage, and gap reasons. |
+| `performance_page_trend` | Page identity matching, eligibility, and historical page scores. |
+| `performance_run_summaries` | Device averages and measured, included, noisy, failed, and regression counts, over all stored pages for each requested attempt. |
+| `performance_page_results_page` | Search, device filtering, metric sorting, total count, pagination, metric normalization, and eligible stored score deltas. |
+
+The overview returns `runSummaries` and empty compatibility arrays for `pages`/`historyPages`. The table requests eight rows at a time through `view=pages`; it fetches full report JSON only when a row is expanded. Page searches are debounced by 250 ms, and stale network requests are cancelled. Counts and averages do not depend on which table page is visible.
 
 Both RPCs select one attempt per deployment/device and compute scores in PostgreSQL. They compare measurement settings and toolchain versions while allowing Node minor/patch updates within a major version. Inconsistent pages, incomplete ingestion, genuinely different configurations, and page identity changes remain gaps with explicit reasons. The browser only renders the returned points. Missing functions produce a chart setup error without breaking the other dashboard sections.
 
