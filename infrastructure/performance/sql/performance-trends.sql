@@ -117,18 +117,14 @@ begin
     ) r on true
     where d.environment = p_environment and d.id = any(p_deployment_ids)
   ), measured as (
-    select a.*, counts.total_pages, counts.included_pages, counts.score,
-      counts.inconsistent_pages, counts.unknown_consistency_pages
+    select a.*, counts.total_pages, counts.included_pages, counts.score
     from attempts a
     left join lateral (
       select count(*) as total_pages,
-        count(*) filter (where p.status = 'complete' and p.consistent and p.score is not null) as included_pages,
-        avg(p.score) filter (where p.status = 'complete' and p.consistent) as score,
-        count(*) filter (where p.status = 'complete' and p.consistent = false) as inconsistent_pages,
-        count(*) filter (where p.status = 'complete' and p.consistent is null) as unknown_consistency_pages
+        count(*) filter (where p.status = 'complete' and p.score is not null) as included_pages,
+        avg(p.score) filter (where p.status = 'complete') as score
       from (
-        select page.status, public.performance_page_score(page.performance_score, page.result) as score,
-          public.performance_page_consistency(page.noisy, page.result) as consistent
+        select page.status, public.performance_page_score(page.performance_score, page.result) as score
         from public.performance_page_results page
         where page.run_id = a.run_id and (
           p_page_id is null or exists (
@@ -149,9 +145,7 @@ begin
       when m.total_pages = 0 then case when p_page_id is null
         then 'Page measurements unavailable' else 'Page identity not measured in this attempt' end
       when m.included_pages = 0 then case
-        when p_page_id is null then 'No complete, consistent page scores'
-        when m.inconsistent_pages > 0 then 'Inconsistent samples'
-        when m.unknown_consistency_pages > 0 then 'Sample consistency not reported'
+        when p_page_id is null then 'No completed page scores'
         else 'Page incomplete or score missing' end
     end as gap_reason from measured m
   )
