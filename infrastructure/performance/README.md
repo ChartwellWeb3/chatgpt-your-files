@@ -22,7 +22,15 @@ Included:
 - A server-only performance client and a performance API that checks login in the original project before querying this project.
 - Separate CLI scripts and environment placeholders.
 
-The hosted project, initial SQL migration, historical data copy, ingestion function, and collector configuration are still pending. No SQL migrations or database changes have been created by this setup. Supplying credentials alone does not make the database ready for the dashboard.
+The complete initial schema migration, historical data copy, ingestion function, and collector configuration are outside this setup. Supplying credentials alone does not create the required database tables. The additive trend-function script below targets the existing performance tables inspected through the configured project's API.
+
+## Install performance trend functions
+
+Open [sql/performance-trends.sql](sql/performance-trends.sql) and run the entire script in the **website performance project's SQL Editor**, then deploy/restart the updated app. It installs `performance_overall_trend`, `performance_page_trend`, and their shared helpers in one transaction. It is repeatable and does not update/delete measurements. Execute privileges are limited to `service_role`; all viewer requests pass through the app's original-project login check.
+
+Both RPCs select one attempt per deployment/device and compute scores in PostgreSQL. They compare measurement settings and toolchain versions while allowing Node minor/patch updates within a major version. Inconsistent pages, incomplete ingestion, genuinely different configurations, and page identity changes remain gaps with explicit reasons. The browser only renders the returned points. Missing functions produce a chart setup error without breaking the other dashboard sections.
+
+This is a SQL Editor installation script, not a replacement for an initial schema migration. Do not run an empty project's `db push` expecting it to install the existing performance schema. Fold these definitions into the performance migration history when that full schema is captured.
 
 ## Application environment
 

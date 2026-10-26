@@ -15,7 +15,7 @@ function client(user: { id: string } | null = { id: "viewer" }, data: unknown = 
   for (const method of ["select", "eq", "is", "gte", "lt", "order", "limit", "in"]) query[method] = vi.fn().mockReturnValue(query);
   query.maybeSingle = vi.fn().mockResolvedValue({ data, error });
   query.then = (resolve: (value: unknown) => unknown) => Promise.resolve({ data, error }).then(resolve);
-  const result = { auth: { getUser: vi.fn().mockResolvedValue({ data: { user }, error: null }) }, from: vi.fn().mockReturnValue(query), query };
+  const result = { auth: { getUser: vi.fn().mockResolvedValue({ data: { user }, error: null }) }, from: vi.fn().mockReturnValue(query), rpc: vi.fn().mockResolvedValue({ data: [], error: null }), query };
   mocks.createClient.mockResolvedValue({ auth: result.auth });
   mocks.createPerformanceClient.mockReturnValue(result);
   return result;
@@ -65,5 +65,52 @@ describe("performance API", () => {
     expect((await GET(new Request("http://localhost/api/performance?deploymentId=bad"))).status).toBe(400);
     expect((await GET(new Request("http://localhost/api/performance?view=page&runId=bad"))).status).toBe(400);
     expect(db.from).not.toHaveBeenCalled();
+  });
+  const deploymentId = "00000000-0000-4000-8000-000000000001";
+  const runId = "00000000-0000-4000-8000-000000000002";
+  const trendUrl = `http://localhost/api/performance?view=trend&device=mobile&deploymentIds=${deploymentId}&referenceRunId=${runId}&selectedRunId=${runId}`;
+  it("authenticates before allowing any trend RPC", async () => {
+    const db = client(null);
+    expect((await GET(new Request(trendUrl))).status).toBe(401);
+    expect(db.rpc).not.toHaveBeenCalled();
+    expect(mocks.createPerformanceClient).not.toHaveBeenCalled();
+  });
+  it("delegates overall averages to Supabase and enforces the configured environment", async () => {
+    const db = client();
+    const points = [{ deploymentId, value: 49.25, includedPages: 8, totalPages: 10 }];
+    db.rpc.mockResolvedValue({ data: points, error: null });
+    const response = await GET(new Request(trendUrl + "&environment=prod"));
+    expect(db.rpc).toHaveBeenCalledWith("performance_overall_trend", {
+      p_environment: "qa", p_deployment_ids: [deploymentId], p_device: "mobile", p_reference_run_id: runId, p_selected_run_id: runId,
+    });
+    expect(await response.json()).toEqual({ points });
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(db.from).not.toHaveBeenCalled();
+  });
+  it("uses the page RPC with the selected attempt and page identity", async () => {
+    const db = client();
+    await GET(new Request(trendUrl + "&pageId=home-en"));
+    expect(db.rpc).toHaveBeenCalledWith("performance_page_trend", expect.objectContaining({ p_page_id: "home-en", p_selected_run_id: runId }));
+  });
+  it("rejects malformed trend requests without calling the database", async () => {
+    const db = client();
+    for (const url of [trendUrl.replace("device=mobile", "device=tablet"), trendUrl.replace(runId, "bad"), trendUrl + "&pageId=", trendUrl.replace(`&selectedRunId=${runId}`, "") + "&pageId=home-en", trendUrl.replace(deploymentId, "bad")]) {
+      expect((await GET(new Request(url))).status).toBe(400);
+    }
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
+  it("shows a setup error until the SQL has been installed", async () => {
+    const db = client();
+    db.rpc.mockResolvedValue({ data: null, error: { code: "PGRST202", message: "Function missing" } });
+    const response = await GET(new Request(trendUrl));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: "PERFORMANCE_TRENDS_NOT_INSTALLED", kind: "configuration" });
+  });
+  it("returns validation and database failures without fabricating points", async () => {
+    const db = client();
+    db.rpc.mockResolvedValue({ data: null, error: { code: "22023", message: "Reference measurement not found" } });
+    expect((await GET(new Request(trendUrl))).status).toBe(400);
+    db.rpc.mockResolvedValue({ data: null, error: { code: "42501", message: "Permission denied" } });
+    expect((await GET(new Request(trendUrl))).status).toBe(503);
   });
 });
