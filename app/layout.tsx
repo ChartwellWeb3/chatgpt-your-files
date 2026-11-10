@@ -13,6 +13,7 @@ import { BarChart3, Bot, Database, Files, Users, FlaskConical, Radar } from "luc
 
 // 1. Import the new server client creator
 import { createClient } from "./utils/supabase/server";
+import { featureForPath, hasFeatureAccess } from "@/lib/feature-access";
 
 export const metadata = {
   title: "Residence Manager",
@@ -43,6 +44,14 @@ export default async function RootLayout({ children }: PropsWithChildren) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  const { data: profile } = user
+    ? await supabase.from("profiles").select("level, feature_access").eq("id", user.id).single()
+    : { data: null };
+  const visibleLinks = Links.filter((link) => {
+    const feature = featureForPath(link.href);
+    return !feature || hasFeatureAccess(profile, feature);
+  });
 
   return (
     <html lang="en" className="h-full dark">
@@ -82,7 +91,7 @@ export default async function RootLayout({ children }: PropsWithChildren) {
                         icon={<Bot className="h-4 w-4" />}
                         links={chatbotMenuLinks}
                       />
-                      {Links.map((link) => {
+                      {visibleLinks.map((link) => {
                         return (
                           <NavLink
                             key={link.href}

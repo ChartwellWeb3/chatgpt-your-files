@@ -26,7 +26,7 @@ The application keeps one login and uses two databases:
 | Original chatbot project | Auth, profiles, chatbot conversations and analytics, content, documents, Storage, existing jobs | Existing `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_DB_URL`; `supabase/` |
 | New performance project | Website deployments, Lighthouse attempts, page results, deployment commits | Server-only `PERFORMANCE_SUPABASE_URL`, `PERFORMANCE_SUPABASE_SECRET_KEY`; `infrastructure/performance/supabase/` |
 
-Keep the existing public Supabase values assigned to the original project. Every signed-in application user can view website performance through the API; the new project does not need a second set of users.
+Keep the existing public Supabase values assigned to the original project. Admins and users granted Performance access can view website performance through the API; the new project does not need a second set of users.
 
 The separate configuration and empty migration/function folders are prepared. The hosted project, initial schema migration, historical data transfer, and ingestion destination still need to be set up. See the [performance project setup](infrastructure/performance/README.md).
 
@@ -49,6 +49,12 @@ Each app deployment shows one performance environment: set the server-only `PERF
 - Level 1 (Admin): full access, can manage team roles and delete visitor data.
 - Level 2 (Content Team): manage content + analytics; cannot delete visitor data.
 - Level 3 (Basic): analytics only; cannot manage content or delete visitor data.
+
+Performance and AI Visibility also require per-user feature grants in `profiles.feature_access`. Admins always have access and their switches are locked on. Only admins can change these switches in `/team`. Feature grants open sections; roles continue to control sensitive actions, including GEO edits (levels 1–2) and schedules/benchmarks (level 1).
+
+Apply `supabase/migrations/20261110120000_add_profile_feature_access.sql` to the **original chatbot/Auth project before deploying this code**. It preserves both features for existing profiles and defaults both off for new profiles. Review pending migrations with `npm run supabase:chatbot -- db push --dry-run`, then apply to that same project. No performance-project migration is needed. The application fails closed when feature access cannot be read. The existing profiles RLS permits only admins to update profiles; the new atomic feature-update RPC also checks admin status.
+
+`lib/feature-access.ts` defines the supported features and routes. Navigation, the request proxy, server pages, and API authorization enforce these grants. Adding a future feature requires extending that registry and the database constraint/RPC in a new migration, plus checking its API before any elevated database access.
 
 ## Database model (from `assets/step-2-er-diagram.png`)
 Core tables and relationships:

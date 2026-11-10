@@ -76,7 +76,7 @@ Browser -> /api/performance
              -> existing dashboard response
 ```
 
-All signed-in application users can view performance. The new project does not need duplicate users or profiles. Its server key bypasses RLS, so every performance API mode must retain the original-project authentication check. The performance client is marked `server-only`, has session persistence/refresh disabled, receives no viewer token or cookies, and disables fetch caching.
+Admins and users with `profiles.feature_access.performance = true` can view performance. The new project does not need duplicate users or profiles. Its server key bypasses RLS, so every performance API mode must retain the original-project authentication and feature authorization checks. Apply the original-project `20261110120000_add_profile_feature_access.sql` migration before deploying the feature switches. The performance client is marked `server-only`, has session persistence/refresh disabled, receives no viewer token or cookies, and disables fetch caching.
 
 When the schema is added, configure grants and RLS for server access and keep anonymous/browser access closed. Do not add policies that expect an original-project session to authenticate automatically in the new project, or foreign keys to the original project's profiles/users.
 

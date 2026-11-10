@@ -244,3 +244,7 @@ Use the website to check that a Test leaves reporting unchanged, Run now contrib
 No tests, builds, hosted SQL, deployments, or paid OpenAI requests were run while preparing this update. The accompanying test source has been updated for the new contracts but remains unexecuted.
 
 References: [Supabase Cron scheduling](https://supabase.com/docs/guides/functions/schedule-functions), [Edge Function limits](https://supabase.com/docs/guides/functions/limits), [OpenAI web search](https://developers.openai.com/api/docs/guides/tools-web-search).
+
+## Per-user section access
+
+AI Visibility requires `profiles.feature_access.ai_visibility = true` in the original chatbot/Auth project. Admins always retain access. Install the original-project migration `supabase/migrations/20261110120000_add_profile_feature_access.sql` before deploying the feature switches; this requires no GEO/performance database update. Admins manage grants in `/team`. The role permissions described in this guide apply after section access is granted: levels 1–2 can manage questions and request AI operations; admin-only actions remain admin-only.

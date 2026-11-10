@@ -1,8 +1,10 @@
 import { getPerformanceEnvironment, PerformanceConfigurationError } from "@/app/utils/supabase/performance-server";
 import GeoDashboard from "./geo-dashboard";
+import { requireFeaturePage } from "@/lib/feature-access-server";
 
 export const dynamic = "force-dynamic";
-export default function GeoPage() {
+export default async function GeoPage() {
+  await requireFeaturePage("ai_visibility");
   try {
     const environment = getPerformanceEnvironment();
     return <GeoDashboard key={environment} environment={environment} />;

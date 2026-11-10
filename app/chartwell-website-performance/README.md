@@ -1,6 +1,6 @@
 # Chartwell website performance
 
-The dashboard is available at **`/chartwell-website-performance`**. It reads stored Lighthouse lab measurements and deployment history from a separate website performance Supabase project. All signed-in application users can open the dashboard, subject to the existing email-verification flow. Login, profiles, and all chatbot data remain in the original project.
+The dashboard is available at **`/chartwell-website-performance`**. It reads stored Lighthouse lab measurements and deployment history from a separate website performance Supabase project. Verified admins and users with `profiles.feature_access.performance = true` can open it. Login, profiles, feature grants, and all chatbot data remain in the original project.
 
 Each app deployment displays one environment from the server-only **`PERFORMANCE_ENVIRONMENT`** setting: **`qa`** on QA or **`prod`** on production. The environment is displayed as a fixed badge, with no dropdown. The default data selection is the **latest deployment** and the **latest measurement attempt for each device**. Mobile and desktop are handled independently. There is no fixture-data fallback in the dashboard.
 
@@ -249,7 +249,7 @@ The Full Lighthouse reports section, report download controls, raw JSON views, n
 
 ## Authentication, errors, and empty states
 
-The route and `/api/performance` are permitted for all existing user levels. Every request verifies a real user in the original project with its cookie-based server client before creating the performance client. This also applies to the page-detail and summary endpoints.
+The route and `/api/performance` require a verified user and a Performance feature grant, with admins always allowed. Every request verifies the user and feature access in the original project with its cookie-based server client before creating the performance client. This also applies to the page-detail and summary endpoints.
 
 Performance queries use `PERFORMANCE_SUPABASE_URL` and `PERFORMANCE_SUPABASE_SECRET_KEY` on the server. A new `sb_secret_...` key is recommended; a legacy `service_role` key also works. This client bypasses RLS, so the API's original-project session check is the access boundary. It has no persisted session, token refresh, browser URL detection, or viewer cookies/access token. Database fetches use `no-store`. The dashboard remains read-only even though the server key has elevated privileges.
 
