@@ -88,7 +88,7 @@ The same Next.js application uses two separate Supabase projects:
 | New website performance project | `performance_deployments`, `performance_runs`, `performance_page_results`, `performance_deployment_commits`, future performance ingestion | Server-only `app/utils/supabase/performance-server.ts`, `PERFORMANCE_SUPABASE_URL`, `PERFORMANCE_SUPABASE_SECRET_KEY`; CLI root `infrastructure/performance/supabase/` |
 
 - Keep the existing public Supabase environment variables pointing to the original project. All chatbot analytics remain there.
-- `/api/performance` must verify the user's session with the original cookie-based server client before creating or querying the performance client. All signed-in application users may view performance.
+- `/api/performance` must verify the user's session and Performance feature access with the original cookie-based server client before creating or querying the performance client. Admins always have access; other users require `profiles.feature_access.performance = true`.
 - The performance client uses a server secret, bypasses RLS, and never receives the viewer's cookies or access token. Authorization belongs in the API. Never import this client into browser code, prefix its secret with `NEXT_PUBLIC_`, or return its credentials to the browser.
 - Missing performance configuration returns a private `503` setup error. The performance client must never fall back to the original project; using the same project origin is rejected.
 - GEO monitoring at `/chartwell-geo` also uses the performance project through `/api/geo`. All three levels can read; levels 1 and 2 can manage questions and request AI operations; only admins create benchmarks or change schedules. Authenticate and authorize against the original project before creating the performance client. Reuse `OPENAI_API_KEY` with independent `OPENAI_GEO_MONITOR_MODEL` and `OPENAI_GEO_ANALYSIS_MODEL` settings; never fall back to the chatbot model. GEO SQL updates are separate timestamped scripts under `infrastructure/performance/sql/`. Scheduled collection (Monday 09:00 America/Toronto), Run now, and Run all use a durable queue in the performance project and `geo-worker`; tests are always excluded from reporting SQL and API queries. See `infrastructure/performance/GEO-DEPLOYMENT.md` for installation and activation. Do not run tests or builds unless the user explicitly reverses their instruction.
@@ -110,7 +110,7 @@ Defined in [app/const/userLevels.tsx](app/const/userLevels.tsx). Access is contr
 | 2 | Content Team | Content management + analytics + prompt testing |
 | 3 | Basic | Analytics, website performance, and team pages only |
 
-Website performance and `/api/performance` are allowed for all three user levels.
+Website performance and AI Visibility have per-user section grants in `profiles.feature_access` (`performance`, `ai_visibility`). Admins always bypass feature switches. All other users require the corresponding explicit grant for pages and APIs; role checks still control sensitive actions. Only admins can change grants in `/team`, through `set_profile_feature_access`. The migration `20261110120000_add_profile_feature_access.sql` belongs to the original chatbot/Auth project; existing profiles retain both features, and new profiles default both off. Install it before deploying the code. `lib/feature-access.ts` is the feature registry; navigation, proxy, server pages, and API checks use it. Missing access data fails closed. The existing role prefixes remain an additional boundary.
 
 ## Key database tables
 

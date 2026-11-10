@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { featureForPath, hasFeatureAccess } from "./lib/feature-access";
 import {
   LEVEL3_ALLOWED_PREFIXES,
   LEVEL1_ALLOWED_PREFIXES,
@@ -71,14 +72,23 @@ export async function proxy(request: NextRequest) {
 
   // ---- NEW: Level gating (only for logged-in verified users) ----
   if (user && user.email_confirmed_at) {
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("level")
+      .select("level, feature_access")
       .eq("id", user.id)
       .single();
 
     // If profile missing, treat as most restricted (level 3)
     const level = profile?.level ?? 3;
+
+    const feature = featureForPath(path);
+    if (feature && (profileError || !hasFeatureAccess(profile, feature))) {
+      if (path.startsWith("/api/")) {
+        return NextResponse.json({ error: profileError ? "Feature access could not be verified." : "You do not have access to this feature." },
+          { status: profileError ? 503 : 403, headers: { "Cache-Control": "private, no-store" } });
+      }
+      return NextResponse.redirect(new URL("/not-authorized", request.url));
+    }
 
     // Level 1 & 2: full access
     // Level 3: only allowed routes

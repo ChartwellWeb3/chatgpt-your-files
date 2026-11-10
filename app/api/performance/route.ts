@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/app/utils/supabase/server";
+import { hasFeatureAccess } from "@/lib/feature-access";
 import { createPerformanceClient, getPerformanceEnvironment, PerformanceConfigurationError } from "@/app/utils/supabase/performance-server";
 
 const deploymentColumns = "id,environment,source_build_number,source_branch,source_build_url,source_finished_at,commit_sha,vercel_deployment_id,deployment_url,base_url,deployment_changes,created_at";
@@ -25,7 +26,13 @@ export async function GET(request: Request) {
   const { data: { user }, error: authError } = await authClient.auth.getUser();
   if (authError || !user) return NextResponse.json({ error: "Sign in to view performance data." }, { status: 401, headers: { "Cache-Control": "private, no-store" } });
 
-  // All signed-in users from the original project may read performance data.
+  if (!user.email_confirmed_at) return NextResponse.json({ error: "Verify your email to view performance data." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
+  const { data: profile, error: profileError } = await authClient.from("profiles")
+    .select("level, feature_access").eq("id", user.id).single();
+  if (profileError) return NextResponse.json({ error: "Feature access could not be verified." }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
+  if (!hasFeatureAccess(profile, "performance")) return NextResponse.json({ error: "You do not have access to Performance." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
+
+  // Authorize against the original project before accessing performance secrets.
   // The separate server client uses elevated credentials and no user session.
   let supabase: ReturnType<typeof createPerformanceClient>;
   let environment: ReturnType<typeof getPerformanceEnvironment>;

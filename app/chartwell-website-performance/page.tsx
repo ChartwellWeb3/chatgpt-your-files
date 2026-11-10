@@ -1,10 +1,12 @@
 import PerformanceDashboard from "./performance-dashboard";
+import { requireFeaturePage } from "@/lib/feature-access-server";
 import { getPerformanceEnvironment, PerformanceConfigurationError } from "@/app/utils/supabase/performance-server";
 import { Card, CardContent } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
 
-export default function ChartwellWebsitePerformancePage() {
+export default async function ChartwellWebsitePerformancePage() {
+  await requireFeaturePage("performance");
   let environment: ReturnType<typeof getPerformanceEnvironment>;
   try {
     environment = getPerformanceEnvironment();

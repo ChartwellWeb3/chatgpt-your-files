@@ -266,6 +266,30 @@ export type Database = {
           },
         ]
       }
+      profiles: {
+        Row: {
+          id: string
+          level: number
+          created_at: string
+          email: string | null
+          feature_access: Json
+        }
+        Insert: {
+          id: string
+          level?: number
+          created_at?: string
+          email?: string | null
+          feature_access?: Json
+        }
+        Update: {
+          id?: string
+          level?: number
+          created_at?: string
+          email?: string | null
+          feature_access?: Json
+        }
+        Relationships: []
+      }
       residences: {
         Row: {
           created_at: string
@@ -454,6 +478,10 @@ export type Database = {
           section_id: number
           snippet: string
         }[]
+      }
+      set_profile_feature_access: {
+        Args: { p_user_id: string; p_feature: string; p_enabled: boolean }
+        Returns: undefined
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }

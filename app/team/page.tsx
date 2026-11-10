@@ -73,7 +73,7 @@ export default async function TeamPage() {
   // List of profiles to manage
   const { data: profiles, error: profilesErr } = await supabase
     .from("profiles")
-    .select("id, level, created_at, email")
+    .select("id, level, created_at, email, feature_access")
         .order("created_at", { ascending: false });
     
     // console.log();
@@ -93,7 +93,7 @@ export default async function TeamPage() {
               Team Management
             </h1>
             <p className="text-sm text-muted-foreground">
-              Manage access levels for Chartwell Manager tools.
+              Manage roles and feature access for Chartwell Manager tools.
             </p>
           </div>
 
@@ -138,7 +138,7 @@ export default async function TeamPage() {
         {!isAdmin && (
           <div className="rounded-md border border-border bg-background/30 p-4 text-sm text-muted-foreground">
             You can view the team list, but only{" "}
-            <span className="font-medium">Admin</span> can change levels or
+            <span className="font-medium">Admin</span> can change roles, feature access, or
             remove user data.
           </div>
         )}

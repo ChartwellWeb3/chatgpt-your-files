@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/app/utils/supabase/server";
+import { hasFeatureAccess } from "@/lib/feature-access";
 import { createPerformanceClient, getPerformanceEnvironment, PerformanceConfigurationError } from "@/app/utils/supabase/performance-server";
 import { NextResponse } from "next/server";
 
@@ -31,8 +32,9 @@ export async function authorize(request?: Request, write = false, admin = false)
   const { data: { user }, error } = await auth.auth.getUser();
   if (error || !user) throw new GeoError("Sign in to use GEO monitoring.", 401);
   if (!user.email_confirmed_at) throw new GeoError("Verify your email to use GEO monitoring.", 403);
-  const { data: profile, error: profileError } = await auth.from("profiles").select("level").eq("id", user.id).maybeSingle();
+  const { data: profile, error: profileError } = await auth.from("profiles").select("level, feature_access").eq("id", user.id).maybeSingle();
   if (profileError) throw new GeoError("Your access level could not be verified.", 503);
+  if (!hasFeatureAccess(profile, "ai_visibility")) throw new GeoError("You do not have access to AI Visibility.", 403);
   const level: 1 | 2 | 3 = profile?.level === 1 ? 1 : profile?.level === 2 ? 2 : 3;
   if ((write && level === 3) || (admin && level !== 1)) throw new GeoError("You do not have permission to make this change.", 403);
   if (write && request) {
