@@ -71,7 +71,7 @@ infrastructure/performance/   # NEW project: website performance data only
   supabase/
     config.toml               # Independent local configuration and ports
     migrations/               # Reserved for performance migrations; no SQL created yet
-    functions/                # Reserved for future performance ingestion functions
+    functions/                # GEO worker + shared validation; future performance ingestion
 tests/                        # Vitest test files mirroring app/ structure
 ```
 
@@ -91,12 +91,13 @@ The same Next.js application uses two separate Supabase projects:
 - `/api/performance` must verify the user's session with the original cookie-based server client before creating or querying the performance client. All signed-in application users may view performance.
 - The performance client uses a server secret, bypasses RLS, and never receives the viewer's cookies or access token. Authorization belongs in the API. Never import this client into browser code, prefix its secret with `NEXT_PUBLIC_`, or return its credentials to the browser.
 - Missing performance configuration returns a private `503` setup error. The performance client must never fall back to the original project; using the same project origin is rejected.
+- GEO monitoring at `/chartwell-geo` also uses the performance project through `/api/geo`. All three levels can read; levels 1 and 2 can manage questions and request AI operations; only admins create benchmarks or change schedules. Authenticate and authorize against the original project before creating the performance client. Reuse `OPENAI_API_KEY` with independent `OPENAI_GEO_MONITOR_MODEL` and `OPENAI_GEO_ANALYSIS_MODEL` settings; never fall back to the chatbot model. GEO SQL updates are separate timestamped scripts under `infrastructure/performance/sql/`. Scheduled collection (Monday 09:00 America/Toronto), Run now, and Run all use a durable queue in the performance project and `geo-worker`; tests are always excluded from reporting SQL and API queries. See `infrastructure/performance/GEO-DEPLOYMENT.md` for installation and activation. Do not run tests or builds unless the user explicitly reverses their instruction.
 - Users and profiles do not need to be copied to the new project. Future performance SQL must not depend on profiles, `auth.uid()` policies for original-project users, or foreign keys into the original database.
 - Reuse the existing dashboard components and `/api/performance` response format. Browser code fetches the API rather than querying the new project directly.
 - The main Performance over time chart shows the overall average of completed page scores per deployment, with separate mobile/desktop views and no page picker. Both charts fetch calculated points through `/api/performance?view=trend`, calling `performance_overall_trend` or `performance_page_trend` in the performance project. SQL requires complete audits, ready ingestion, numeric scores, and comparable measurement settings; noisy/unknown-consistency samples remain included in history. Charts have no trust-status column or consistency warnings. Device-card averages and stored deltas retain consistency checks. Node minor/patch updates within one major version are compatible; browser/Lighthouse/settings changes remain separate. Both use one attempt per deployment; do not mix reruns or devices into an average. The SQL Editor installation script is `infrastructure/performance/sql/performance-trends.sql`; full initial schema/migration capture remains separate.
 - Device-card averages/counts come from `performance_run_summaries`, independently of table pagination. Page search, device filtering, metric sorting, normalization, eligible stored deltas, and pagination come from `performance_page_results_page` through `/api/performance?view=pages`. Fetch eight rows per page, debounce searches, preserve missing values and separate attempts/devices, and keep full page JSON on demand. Do not restore browser aggregation over bulk page/history arrays.
 - Each app deployment has one website performance environment, configured with the server-only `PERFORMANCE_ENVIRONMENT` variable (`qa` or `prod`). `getPerformanceEnvironment()` in `performance-server.ts` supplies the server-rendered dashboard prop and the API's deployment/history filter. The UI shows a static badge; there is no environment dropdown. The API ignores a request's `environment` parameter. Missing/invalid values return a setup state instead of defaulting to DEV.
-- The new project's migrations/functions folders are scaffolding only. No performance migration, data copy, or ingestion function has been created or deployed. Inspect the actual performance schema before creating its initial migration.
+- The new project's website-performance migration history remains scaffolding; GEO worker source is supplied separately. No website-performance migration, data copy, or ingestion function has been deployed. Inspect the actual performance schema before creating its initial migration.
 - See `infrastructure/performance/README.md` for setup and the remaining cutover work. The user creates the hosted project and configures credentials.
 
 ## Access levels
@@ -181,6 +182,7 @@ The first three Supabase variables remain assigned to the original chatbot proje
 - Never copy the entire chatbot migration history into the performance setup or move applied migration files out of the original history. The new project will receive an initial migration containing its actual performance schema and dependencies only.
 - Review pending migrations with `db push --dry-run` for the intended setup before deployment. The initial performance migration and historical data transfer are separate future tasks.
 - **Never edit a migration that has already been applied** (`supabase db push` or applied via dashboard). Once pushed, a migration file is immutable history.
+- SQL Editor scripts already handed to the user are also immutable. Put each subsequent database update in a new timestamped SQL file; never revise a previously supplied installation/update script.
 - To change an already-applied function or schema, create a new timestamped migration (`YYYYMMDDHHMMSS_description.sql`) using `create or replace function` or `alter table`.
 - Migration filenames follow the pattern: `20260406130000_add_analytics_booker_profile.sql`.
 

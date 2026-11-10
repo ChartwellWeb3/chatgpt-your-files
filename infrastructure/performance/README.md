@@ -18,7 +18,7 @@ The new project's expected tables are `performance_deployments`, `performance_ru
 Included:
 
 - An independent `supabase/config.toml` and ignored local project-link metadata.
-- Empty `supabase/migrations/` and `supabase/functions/` folders, retained with `.gitkeep` files.
+- An independent migration workdir; the website-performance initial migration remains pending. GEO worker source lives in `supabase/functions/geo-worker/`, with shared validation in `_shared/`.
 - A server-only performance client and a performance API that checks login in the original project before querying this project.
 - Separate CLI scripts and environment placeholders.
 
@@ -129,3 +129,11 @@ It writes `infrastructure/performance/database.types.ts`. The existing `npm run 
 5. Confirm ingestion and dashboard results after the data/schema are ready. Retain the old performance copy during the transition; any cleanup is a separate later change.
 
 See the [dashboard README](../../app/chartwell-website-performance/README.md) for visible/hidden fields, calculations, query limits, and UI behavior.
+
+## GEO monitoring
+
+The `/chartwell-geo` page also uses this performance project, in separate `geo_*` tables. It reuses the original project's login and permissions. Scheduled collection, Run now, and Run all contribute to one reporting dataset; individual Test actions never affect statistics.
+
+Initial prerequisites remain [the GEO schema](sql/geo-monitoring.sql) and [dashboard operations](sql/20261027190000_geo_dashboard_operations.sql). Do not edit or rerun those files when already installed. New queue installation, a separate Cron activation file, the Edge Function, and Dashboard/CLI deployment instructions are documented in [GEO-DEPLOYMENT.md](GEO-DEPLOYMENT.md).
+
+The weekly schedule is Monday at 9 AM Toronto time. Deploy the worker and website and configure Edge/Vault secrets before activating Cron. Admins then enable the schedule for their chosen benchmark/environment. There is no spending-cap feature. No hosted database changes or deployments have been performed by preparing these files.

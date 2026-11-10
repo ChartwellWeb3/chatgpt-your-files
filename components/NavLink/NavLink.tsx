@@ -20,8 +20,8 @@ export default function NavLink({ href, children, icon }: IProps) {
     : "text-white bg-green-800 gap-2"; // Inactive styles
 
   return (
-    <Link href={href}>
-      <Button className={linkClasses}>
+    <Link href={href} className="shrink-0">
+      <Button className={`${linkClasses} whitespace-nowrap`}>
         {icon ? (
           <span className="text-base leading-none" aria-hidden>
             {icon}
