@@ -1,4 +1,4 @@
-import { authorize, body, checked, day, failure, GeoError, json, metricArgs, modelConfig, nextDay, option, pageNumber, text, torontoMidnight, uuid } from "@/lib/geo/server";
+import { authorize, body, checked, day, failure, GeoError, json, metricArgs, modelConfig, nextDay, option, pageNumber, requiredData, text, torontoMidnight, uuid } from "@/lib/geo/server";
 import type { Benchmark, LiveStatus, Metric, Run, Source } from "@/lib/geo/types";
 import { providerEvidence } from "@/lib/geo/analysis";
 
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
       if (to<from || Date.parse(to)-Date.parse(from)>366*86400000) throw new GeoError("Choose a date range of up to one year.");
       const search = params.get("search")?.trim() || "";
       if (search.length>200) throw new GeoError("Search must be under 200 characters.");
-      return json(checked(await db.rpc("geo_question_metrics_page", {
+      return json(requiredData(await db.rpc("geo_question_metrics_page", {
         p_environment: environment, p_benchmark_id: params.get("benchmarkId") ? uuid(params.get("benchmarkId")) : null,
         p_from: from, p_to: to, p_topic_id: params.get("topicId") ? uuid(params.get("topicId")) : null,
         p_market_id: params.get("marketId") ? uuid(params.get("marketId")) : null,
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
       const page = pageNumber(params.get("page")); const pageSize = 10;
       const result = await db.from("geo_mapping_review_queue").select(mappingColumns, { count: "exact" }).eq("environment", environment)
         .order("created_at", { ascending: false }).order("id").range(page * pageSize, (page + 1) * pageSize - 1);
-      return json({ rows: checked(result), total: result.count || 0, page, pageSize });
+      return json({ rows: requiredData(result), total: result.count || 0, page, pageSize });
     }
     if (view === "catalogs" || view === "bootstrap") {
       const [topics, markets, brands, benchmarks] = await Promise.all([
@@ -43,30 +43,30 @@ export async function GET(request: Request) {
         db.from("geo_brands").select("id,slug,name,aliases,domains,is_chartwell").order("name"),
         db.from("geo_benchmarks").select(benchmarkColumns).eq("environment", environment).order("created_at", { ascending: false }).limit(100),
       ]);
-      for (const result of [topics, markets, brands, benchmarks]) checked(result);
-      const catalogs = { environment, topics: topics.data, markets: markets.data, brands: brands.data, benchmarks: benchmarks.data, models: modelConfig() };
+      const catalogs = { environment, topics: requiredData(topics), markets: requiredData(markets),
+        brands: requiredData(brands), benchmarks: requiredData(benchmarks), models: modelConfig() };
       if (view === "catalogs") return json(catalogs);
       // Compatibility for older clients; the new page loads catalogs and live data separately.
-      const live = checked(await db.rpc("geo_live_status", { p_environment: environment })) as LiveStatus;
+      const live = requiredData(await db.rpc("geo_live_status", { p_environment: environment })) as LiveStatus;
       return json({ ...catalogs, ...live, level });
     }
-    if (view === "live") return json({ ...checked(await db.rpc("geo_live_status", { p_environment: environment })), level });
+    if (view === "live") return json({ ...requiredData(await db.rpc("geo_live_status", { p_environment: environment })), level });
     if (view === "schedule") {
       return json({ lastBatch: checked(await db.rpc("geo_last_scheduled_batch", { p_environment: environment, p_benchmark_id: uuid(params.get("benchmarkId")) })) });
     }
     if (view === "overview") {
       const args = metricArgs(params, environment);
-      return json(checked(await db.rpc("geo_overview", {
+      return json(requiredData(await db.rpc("geo_overview", {
         p_environment: environment, p_benchmark_id: args.p_benchmark_id, p_from: day(params.get("from")), p_to: day(params.get("to")),
         p_topic_id: args.p_topic_id, p_market_id: args.p_market_id, p_language: args.p_language,
       })));
     }
     if (view === "competitors") {
-      const rows = checked(await db.rpc("geo_brand_metrics", { ...metricArgs(params, environment), p_group_by: "overall" })) as Metric[];
+      const rows = requiredData(await db.rpc("geo_brand_metrics", { ...metricArgs(params, environment), p_group_by: "overall" })) as Metric[];
       return json({ rows: rows.filter(row => row.mentions > 0 || row.is_chartwell), samples: rows[0]?.samples || 0 });
     }
     if (view === "sources") {
-      const summary = checked(await db.rpc("geo_dashboard_summary", metricArgs(params, environment)));
+      const summary = requiredData(await db.rpc("geo_dashboard_summary", metricArgs(params, environment)));
       return json({ sources: summary.sources });
     }
     if (view === "dashboard") {
@@ -82,9 +82,8 @@ export async function GET(request: Request) {
         db.rpc("geo_brand_metrics", { ...args, p_start: torontoMidnight(previousFrom), p_end: torontoMidnight(from), p_group_by: "overall" }),
         db.rpc("geo_dashboard_summary", args),
       ]);
-      for (const result of [overall, topics, markets, trend, previous, summary]) checked(result);
-      return json({ overall: overall.data, topics: topics.data, markets: markets.data, trend: trend.data, previous: previous.data,
-        ...summary.data, previousFrom, previousTo });
+      return json({ overall: requiredData(overall), topics: requiredData(topics), markets: requiredData(markets),
+        trend: requiredData(trend), previous: requiredData(previous), ...requiredData(summary), previousFrom, previousTo });
     }
     if (view === "validation") {
       // Legacy questionKind=all/unbranded requests cannot broaden factual validation.
@@ -97,7 +96,7 @@ export async function GET(request: Request) {
       if (args.p_question_kind) query = query.eq("question_snapshot->>questionKind", args.p_question_kind);
       if (params.get("reviewStatus")) query = query.eq("review_status", option(params.get("reviewStatus"), ["unreviewed", "correct", "partially_correct", "incorrect", "unverifiable"]));
       const result = await query.order("scheduled_for", { ascending: false }).order("id").range(page * pageSize, (page + 1) * pageSize - 1);
-      return json({ rows: checked(result), total: result.count || 0, page, pageSize });
+      return json({ rows: requiredData(result), total: result.count || 0, page, pageSize });
     }
     if (view === "questions") {
       const page = pageNumber(params.get("page")); const pageSize = 10;
@@ -109,7 +108,7 @@ export async function GET(request: Request) {
       if (params.get("topicId")) query = query.eq("topic_id", uuid(params.get("topicId")));
       if (params.get("marketId")) query = query.eq("market_id", uuid(params.get("marketId")));
       const result = await query.order("updated_at", { ascending: false }).order("id").range(page * pageSize, (page + 1) * pageSize - 1);
-      return json({ rows: checked(result), total: result.count || 0, page, pageSize });
+      return json({ rows: requiredData(result), total: result.count || 0, page, pageSize });
     }
     if (view === "batches") {
       const page = pageNumber(params.get("page")); const pageSize = 10;
@@ -120,14 +119,14 @@ export async function GET(request: Request) {
       if (includeCancelled === "false") query = query.is("cancelled_at", null);
       if (params.get("kind")) query = query.eq("trigger_kind", option(params.get("kind"), ["scheduled", "single", "all", "test"]));
       const result = await query.order("created_at", { ascending: false }).order("id").range(page * pageSize, (page + 1) * pageSize - 1);
-      return json({ rows: checked(result), total: result.count || 0, page, pageSize });
+      return json({ rows: requiredData(result), total: result.count || 0, page, pageSize });
     }
     if (view === "tests") {
       const page = pageNumber(params.get("page")); const pageSize = 10;
       let query = db.from("geo_test_runs").select(runColumns, { count: "exact" }).eq("environment", environment);
       if (params.get("benchmarkId")) query = query.eq("benchmark_id", uuid(params.get("benchmarkId")));
       const result = await query.order("scheduled_for", { ascending: false }).order("id").range(page * pageSize, (page + 1) * pageSize - 1);
-      return json({ rows: checked(result), total: result.count || 0, page, pageSize });
+      return json({ rows: requiredData(result), total: result.count || 0, page, pageSize });
     }
     if (view === "runs") {
       const args = metricArgs(params, environment); const page = pageNumber(params.get("page")); const pageSize = 10;
@@ -145,7 +144,7 @@ export async function GET(request: Request) {
       // Reporting history always excludes test runs, including legacy manual history.
       if (params.get("status")) query = query.eq("status", option(params.get("status"), ["queued", "running", "succeeded", "failed", "cancelled", "needs_review"]));
       const result = await query.order("scheduled_for", { ascending: false }).order("id").range(page * pageSize, (page + 1) * pageSize - 1);
-      return json({ rows: checked(result), total: result.count || 0, page, pageSize });
+      return json({ rows: requiredData(result), total: result.count || 0, page, pageSize });
     }
     if (["evidence", "raw", "attempt", "reviews"].includes(view)) {
       const run = checked(await db.from("geo_runs").select(runColumns).eq("environment", environment).eq("id", uuid(params.get("runId"))).maybeSingle()) as Run | null;
@@ -161,7 +160,7 @@ export async function GET(request: Request) {
         const page = pageNumber(params.get("page")); const pageSize = 10;
         const result = await db.from("geo_answer_reviews").select("*", { count: "exact" }).eq("environment", environment)
           .eq("run_id", run.id).eq("attempt_id", run.selected_attempt_id).order("review_version", { ascending: false }).range(page * pageSize, (page + 1) * pageSize - 1);
-        return json({ rows: checked(result), total: result.count || 0, page, pageSize });
+        return json({ rows: requiredData(result), total: result.count || 0, page, pageSize });
       }
       if (view === "attempt") {
         const attempt = checked(await db.from("geo_run_attempts").select(attemptColumns).eq("id", uuid(params.get("attemptId"))).eq("run_id", run.id).maybeSingle());
@@ -173,7 +172,7 @@ export async function GET(request: Request) {
         db.from("geo_run_attempts").select(attemptMetadataColumns).eq("run_id", run.id).order("attempt_number", { ascending: false }).limit(10),
         db.from("geo_benchmarks").select(benchmarkColumns).eq("id", run.benchmark_id).eq("environment", environment).single(),
       ]);
-      const attempts = checked(attemptResult); const benchmark = checked(benchmarkResult) as Benchmark;
+      const attempts = requiredData(attemptResult); const benchmark = requiredData(benchmarkResult) as Benchmark;
       const attemptId = run.selected_attempt_id || attempts?.[0]?.id;
       const attempt = attemptId ? checked(await db.from("geo_run_attempts").select(attemptColumns).eq("id", attemptId).eq("run_id", run.id).maybeSingle()) : null;
       const [mentions, sources, reviewResult, mappingResult, extractedResult] = await Promise.all([
@@ -188,7 +187,7 @@ export async function GET(request: Request) {
         const saved = checked(await db.from("geo_run_attempts").select("raw_response").eq("id", attempt.id).eq("run_id", run.id).maybeSingle());
         if (saved?.raw_response) savedSources = providerEvidence(saved.raw_response, []).sources.map(({ annotation: _annotation, ...source }) => source);
       }
-      return json({ run, benchmark, attempts, attempt, mentions: checked(mentions), sources: savedSources, review: checked(reviewResult)?.[0] || null,
+      return json({ run, benchmark, attempts, attempt, mentions: requiredData(mentions), sources: savedSources, review: checked(reviewResult)?.[0] || null,
         mappingReviews: checked(mappingResult) || [], extractedMentions: checked(extractedResult)?.mentions || [] });
     }
     if (view === "opportunities") {
@@ -201,7 +200,7 @@ export async function GET(request: Request) {
           .order("created_at", { ascending: false }).range(page * pageSize, (page + 1) * pageSize - 1),
         db.rpc("geo_reporting_count", args),
       ]);
-      return json({ rows: checked(result), total: result.count || 0, page, pageSize, answerCount: Number(checked(count)) });
+      return json({ rows: requiredData(result), total: result.count || 0, page, pageSize, answerCount: Number(checked(count)) });
     }
     throw new GeoError("Unknown GEO view.");
   } catch (error) { return failure(error); }
@@ -213,13 +212,13 @@ export async function POST(request: Request) {
     const input = await body(request);
     if (input.action === "verifyMapping" || input.action === "recheckMapping") {
       if (level !== 1) throw new GeoError("Only an administrator can verify brand ownership mappings.", 403);
-      if (input.action === "recheckMapping") return json(checked(await db.rpc("geo_recheck_mapping", { p_environment: environment, p_run_id: uuid(input.runId) })), 202);
+      if (input.action === "recheckMapping") return json(requiredData(await db.rpc("geo_recheck_mapping", { p_environment: environment, p_run_id: uuid(input.runId) })), 202);
       if (input.confirmed !== true) throw new GeoError("Confirm that the reference source establishes the residence-to-brand relationship.");
       const reference = text(input.referenceUrl, 1, 2000);
       let url: URL;
       try { url = new URL(reference); } catch { throw new GeoError("Enter a complete reference URL."); }
       if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.href.length>2000) throw new GeoError("Use an http or https reference URL without embedded credentials.");
-      return json(checked(await db.rpc("geo_verify_mapping", {
+      return json(requiredData(await db.rpc("geo_verify_mapping", {
         p_environment: environment, p_review_id: uuid(input.reviewId), p_actor: user.id,
         p_brand_id: input.brandId == null ? null : uuid(input.brandId),
         p_brand_name: input.brandId == null ? text(input.brandName, 1, 160) : null,
@@ -231,20 +230,20 @@ export async function POST(request: Request) {
       if (typeof input.enabled !== "boolean") throw new GeoError("Choose whether the schedule is enabled.");
       if (input.enabled) {
         const worker = checked(await db.from("geo_worker_runtime").select("dispatcher_enabled,last_seen_at").eq("id", true).single());
-        if (!worker.dispatcher_enabled || !worker.last_seen_at || Date.parse(worker.last_seen_at) < Date.now() - 5 * 60000) throw new GeoError("Deploy the worker and activate Cron first. A recent worker heartbeat is required.", 503);
+        if (!worker?.dispatcher_enabled || !worker.last_seen_at || Date.parse(worker.last_seen_at) < Date.now() - 5 * 60000) throw new GeoError("Deploy the worker and activate Cron first. A recent worker heartbeat is required.", 503);
       }
       checked(await db.rpc("geo_set_schedule", { p_environment: environment, p_benchmark_id: uuid(input.benchmarkId), p_enabled: input.enabled }));
       return json({ saved: true });
     }
     if (input.action === "cancelBatch") {
-      const result = checked(await db.rpc("geo_cancel_batch", { p_environment: environment, p_batch_id: uuid(input.batchId), p_actor: user.id }));
+      const result = requiredData(await db.rpc("geo_cancel_batch", { p_environment: environment, p_batch_id: uuid(input.batchId), p_actor: user.id }));
       return json(result);
     }
     if (input.action === "retryBatch") {
       const batch = checked(await db.from("geo_batches").select("id,cancelled_at").eq("id", uuid(input.batchId)).eq("environment", environment).maybeSingle());
       if (!batch) throw new GeoError("Collection batch not found.", 404);
       if (batch.cancelled_at) throw new GeoError("This collection was cancelled. Start a new collection to run these questions again.", 409);
-      const result = checked(await db.rpc("geo_retry_batch", { p_environment: environment, p_batch_id: uuid(input.batchId), p_request_key: uuid(input.requestKey) }));
+      const result = requiredData(await db.rpc("geo_retry_batch", { p_environment: environment, p_batch_id: uuid(input.batchId), p_request_key: uuid(input.requestKey) }));
       return json({ ...result, status: "queued" }, 202);
     }
     if (input.action === "saveQuestion") {
@@ -258,7 +257,7 @@ export async function POST(request: Request) {
         if (!result) throw new GeoError("This question changed while you were editing. Refresh before saving.", 409);
         return json(result);
       }
-      return json(checked(await db.from("geo_questions").insert({ ...values, environment, status: "draft", created_by: user.id, discovery_source: "manual" }).select(questionColumns).single()), 201);
+      return json(requiredData(await db.from("geo_questions").insert({ ...values, environment, status: "draft", created_by: user.id, discovery_source: "manual" }).select(questionColumns).single()), 201);
     }
     if (input.action === "questionSchedule") {
       if (typeof input.enabled !== "boolean") throw new GeoError("Choose whether this question is included in scheduled collection.");
@@ -290,7 +289,7 @@ export async function POST(request: Request) {
       if (!target) throw new GeoError("Completed reporting answer not found.", 404);
       if (target.question_snapshot?.questionKind !== "branded") throw new GeoError("Only answers to questions with brand names can be reviewed.");
       if (target.selected_attempt_id !== attemptId) throw new GeoError("This answer changed. Refresh before reviewing it.", 409);
-      const result = checked(await db.rpc("geo_review_answer", {
+      const result = requiredData(await db.rpc("geo_review_answer", {
         p_environment: environment, p_run_id: runId, p_attempt_id: attemptId, p_actor: user.id,
         p_expected_review_id: input.expectedReviewId == null ? null : uuid(input.expectedReviewId),
         p_verdict: verdict, p_expected_answer: expectedAnswer || null, p_ground_truth_url: groundTruthUrl,

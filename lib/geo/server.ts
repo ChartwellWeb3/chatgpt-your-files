@@ -43,9 +43,18 @@ export async function authorize(request?: Request, write = false, admin = false)
   const db = createPerformanceClient();
   return { db, environment, user, level };
 }
-export function checked<T>(result: { data: T; error: unknown }): T {
+type DatabaseResult = { data: unknown; error: unknown };
+
+// Infer the complete response, so heterogeneous PostgREST unions keep each payload type.
+// Optional queries and writes without .select() may legitimately return null.
+export function checked<R extends DatabaseResult>(result: R): R["data"] {
   if (result.error) throw result.error;
   return result.data;
+}
+export function requiredData<R extends DatabaseResult>(result: R): NonNullable<R["data"]> {
+  const data = checked(result);
+  if (data == null) throw new GeoError("Required GEO data is missing. Refresh or ask an administrator to check the setup.", 503);
+  return data;
 }
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function uuid(value: unknown, label = "ID"): string {
