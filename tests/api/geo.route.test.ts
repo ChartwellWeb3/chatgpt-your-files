@@ -30,6 +30,19 @@ const request = (body: unknown, url = "/api/geo", origin = "http://localhost") =
 const filters = `benchmarkId=${id(10)}&from=2026-11-01&to=2026-11-01`;
 
 describe("GEO API authorization and database boundaries", () => {
+  it("rejects missing worker runtime for collection and schedule activation", async () => {
+    const { db } = setup(1, undefined, { geo_worker_runtime: null });
+    expect((await AI(request({ action: "runNow", questionId: id(1), benchmarkId: id(10), requestKey: id(50) }, "/api/geo/ai"))).status).toBe(503);
+    expect((await POST(request({ action: "schedule", benchmarkId: id(10), enabled: true }))).status).toBe(503);
+    expect(db.rpc).not.toHaveBeenCalled();
+    expect(mocks.response).not.toHaveBeenCalled();
+  });
+  it("rejects missing required catalog data while preserving optional not-found responses", async () => {
+    setup(3, undefined, { geo_topics: null });
+    expect((await GET(new Request("http://localhost/api/geo?view=catalogs"))).status).toBe(503);
+    setup(3, undefined, { geo_runs: null });
+    expect((await GET(new Request(`http://localhost/api/geo?view=evidence&runId=${id(20)}`))).status).toBe(404);
+  });
   it("requests a compact paginated question metric result with server-controlled environment", async () => {
     const { db } = setup(3);
     db.rpc.mockResolvedValue({ data: { rows: [], total: 0, page: 2, pageSize: 10 }, error: null });
