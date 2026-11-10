@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     if (action === "createBenchmark" && level !== 1) throw new GeoError("Only an administrator can configure a benchmark.", 403);
     if (["run", "runNow", "runAll", "test"].includes(action)) {
       const runtime = checked(await db.from("geo_worker_runtime").select("dispatcher_enabled").eq("id", true).single());
-      if (!runtime.dispatcher_enabled) throw new GeoError("The GEO worker dispatcher is not activated. Ask an administrator to complete the deployment steps.", 503);
+      if (!runtime?.dispatcher_enabled) throw new GeoError("The GEO worker dispatcher is not activated. Ask an administrator to complete the deployment steps.", 503);
       const result = checked(await db.rpc("geo_enqueue", {
         p_environment: environment, p_benchmark_id: uuid(input.benchmarkId),
         p_kind: action === "test" ? "test" : action === "runAll" ? "all" : "single",
