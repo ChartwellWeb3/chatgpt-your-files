@@ -46,4 +46,8 @@ enabled = false
 
 # Enable when an actual performance ingestion function is added.
 [edge_runtime]
-enabled = false
+enabled = true
+
+[functions.geo-worker]
+# Internal dispatcher only. The handler validates GEO_WORKER_SECRET itself.
+verify_jwt = false

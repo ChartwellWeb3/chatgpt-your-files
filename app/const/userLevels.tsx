@@ -16,12 +16,14 @@ const PREFIXES: Record<string, AllowedPrefix> = {
   promptTesting: { name: "Prompt Testing", path: "/chatbot-prompt-testing" },
   websitePerformance: { name: "Chartwell website performance", path: "/chartwell-website-performance" },
   performanceApi: { name: "Website performance data", path: "/api/performance" },
+  geo: { name: "Chartwell AI visibility", path: "/chartwell-geo" },
+  geoApi: { name: "AI visibility data", path: "/api/geo" },
   api: { name: "API", path: "/api" },
   team: { name: "Team Management", path: "/team" },
 };
 
 const LEVEL_ALLOWED_KEYS: Record<Level, (keyof typeof PREFIXES)[]> = {
-  3: ["home", "analytics", "websitePerformance", "performanceApi", "team"],
+  3: ["home", "analytics", "websitePerformance", "performanceApi", "geo", "geoApi", "team"],
   2: [
     "home",
     "content",
@@ -30,9 +32,11 @@ const LEVEL_ALLOWED_KEYS: Record<Level, (keyof typeof PREFIXES)[]> = {
     "promptTesting",
     "websitePerformance",
     "performanceApi",
+    "geo",
+    "geoApi",
     "team",
   ],
-  1: ["home", "content", "analytics", "promptTesting", "websitePerformance", "performanceApi", "api", "team"],
+  1: ["home", "content", "analytics", "promptTesting", "websitePerformance", "performanceApi", "geo", "geoApi", "api", "team"],
 };
 
 export const LEVEL_ALLOWED_PREFIXES: Record<Level, AllowedPrefix[]> = {

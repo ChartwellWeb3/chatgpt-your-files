@@ -15,6 +15,10 @@ export const ChatbotLinks = [
 
 export const Links = [
   {
+    href: "/chartwell-geo",
+    label: "AI visibility",
+  },
+  {
     href: "/chartwell-website-performance",
     label: "Chartwell website performance",
   },

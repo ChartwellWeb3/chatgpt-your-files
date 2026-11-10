@@ -9,7 +9,7 @@ import Link from "next/link";
 import type { PropsWithChildren, ReactNode } from "react";
 import "three-dots/dist/three-dots.css";
 import "./globals.css";
-import { BarChart3, Bot, Database, Files, Users, FlaskConical } from "lucide-react";
+import { BarChart3, Bot, Database, Files, Users, FlaskConical, Radar } from "lucide-react";
 
 // 1. Import the new server client creator
 import { createClient } from "./utils/supabase/server";
@@ -32,6 +32,7 @@ export default async function RootLayout({ children }: PropsWithChildren) {
     "/chat-bot-analytics": <BarChart3 className="h-4 w-4" />,
     "/chatbot-prompt-testing": <FlaskConical className="h-4 w-4" />,
     "/chartwell-website-performance": <Database className="h-4 w-4" />,
+    "/chartwell-geo": <Radar className="h-4 w-4" />,
     "/team": <Users className="h-4 w-4" />,
   };
   const chatbotMenuLinks = ChatbotLinks.map((link) => ({
@@ -49,11 +50,11 @@ export default async function RootLayout({ children }: PropsWithChildren) {
         <Providers>
           <div className="flex flex-col h-full">
             <nav className="w-full border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-              <div className="max-w-full flex justify-between items-center px-6 h-14">
-                <div className="flex items-center gap-6">
+              <div className="max-w-full flex justify-between items-center gap-4 px-4 sm:px-6 h-14">
+                <div className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto sm:gap-6">
                   <Link
                     href="/"
-                    className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                    className="flex shrink-0 items-center gap-2 hover:opacity-80 transition-opacity"
                   >
                     <div className="w-6 h-6 bg-primary rounded-md flex items-center justify-center">
                       <svg
@@ -95,7 +96,7 @@ export default async function RootLayout({ children }: PropsWithChildren) {
                     </>
                   ) : null}
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex shrink-0 items-center gap-2 sm:gap-4">
                   {user ? (
                     <>
                       <div className="hidden sm:block text-sm text-muted-foreground">
