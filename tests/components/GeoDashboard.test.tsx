@@ -168,7 +168,7 @@ describe("GEO dashboard workflows", () => {
   });
   it("queues a preview as a test rather than a reporting answer", async () => {
     const user = userEvent.setup(); vi.mocked(geoWrite).mockResolvedValue({ runId: geoId(20), purpose: "test", status: "queued" });
-    mount(); await tab("Questions"); await user.click(await screen.findByRole("button", { name: "Test", exact: true }));
+    mount(); await tab("Questions"); await user.click(await screen.findByRole("button", { name: /^Test$/ }));
     await waitFor(() => expect(geoWrite).toHaveBeenCalledWith(expect.objectContaining({ action: "test", questionId: geoId(1) }), true));
     expect(await screen.findByRole("dialog", { name: "Answer details" })).toBeInTheDocument();
   });
