@@ -12,6 +12,8 @@ const PREFIXES: Record<string, AllowedPrefix> = {
     name: "Sitecore Residence Selector API",
     path: "/api/sitecore/residence-selector",
   },
+  suitePricing: { name: "Suite pricing", path: "/sitecore-pricing" },
+  suitePricingApi: { name: "Suite pricing API", path: "/api/sitecore/pricing" },
   analytics: { name: "Chat Bot Analytics", path: "/chat-bot-analytics" },
   promptTesting: { name: "Prompt Testing", path: "/chatbot-prompt-testing" },
   websitePerformance: { name: "Chartwell website performance", path: "/chartwell-website-performance" },
@@ -28,6 +30,8 @@ const LEVEL_ALLOWED_KEYS: Record<Level, (keyof typeof PREFIXES)[]> = {
     "home",
     "content",
     "sitecoreResidenceSelectorApi",
+    "suitePricing",
+    "suitePricingApi",
     "analytics",
     "promptTesting",
     "websitePerformance",
@@ -36,7 +40,7 @@ const LEVEL_ALLOWED_KEYS: Record<Level, (keyof typeof PREFIXES)[]> = {
     "geoApi",
     "team",
   ],
-  1: ["home", "content", "analytics", "promptTesting", "websitePerformance", "performanceApi", "geo", "geoApi", "api", "team"],
+  1: ["home", "content", "analytics", "promptTesting", "websitePerformance", "performanceApi", "geo", "geoApi", "suitePricing", "api", "team"],
 };
 
 export const LEVEL_ALLOWED_PREFIXES: Record<Level, AllowedPrefix[]> = {

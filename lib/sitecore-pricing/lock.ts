@@ -1,0 +1,24 @@
+import { SaxesParser } from "saxes";
+
+export type SitecoreLock = { locked: boolean; known: boolean; owner?: string };
+
+// Sitecore can retain <r /> in __Lock after check-in. A nonempty XML value
+// alone is not evidence of a lock; the owner attribute identifies a real lock.
+export function parseSitecoreLock(value: string | null | undefined): SitecoreLock {
+  const xml = value?.trim() || "";
+  if (!xml) return { locked: false, known: true };
+  if (xml.length > 16000) return { locked: true, known: false };
+  let elements = 0; let valid = true; let owner = "";
+  const parser = new SaxesParser({ xmlns: false });
+  parser.on("doctype", () => { throw new Error("Unexpected lock document type"); });
+  parser.on("opentag", tag => {
+    elements++;
+    if (elements !== 1 || tag.name !== "r") valid = false;
+    if (elements === 1) owner = (tag.attributes.owner || "").trim();
+  });
+  parser.on("text", text => { if (text.trim()) valid = false; });
+  parser.on("cdata", text => { if (text.trim()) valid = false; });
+  try { parser.write(xml).close(); } catch { return { locked: true, known: false }; }
+  if (!valid || elements !== 1) return { locked: true, known: false };
+  return owner ? { locked: true, known: true, owner } : { locked: false, known: true };
+}

@@ -14,6 +14,7 @@ export const ChatbotLinks = [
 ];
 
 export const Links = [
+  { href: "/sitecore-pricing", label: "Suite pricing" },
   {
     href: "/chartwell-geo",
     label: "AI visibility",

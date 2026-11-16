@@ -61,7 +61,7 @@ export async function updateUserFeatureAction(input: {
   const { error } = await supabase.rpc("set_profile_feature_access", {
     p_user_id: input.userId, p_feature: input.feature, p_enabled: input.enabled,
   });
-  if (error) return { error: "Could not save feature access. Check that the access migration is installed and the user is not an admin." };
+  if (error) return { error: "Could not save feature access. Check that the access migration is installed and the selected role is eligible. Admin access is always enabled." };
   revalidatePath("/", "layout");
   return {};
 }
