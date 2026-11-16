@@ -51,3 +51,7 @@ enabled = true
 [functions.geo-worker]
 # Internal dispatcher only. The handler validates GEO_WORKER_SECRET itself.
 verify_jwt = false
+
+[functions.sitecore-pricing]
+# Private dispatcher; validates SITECORE_PRICING_DISPATCH_SECRET itself.
+verify_jwt = false

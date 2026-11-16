@@ -20,7 +20,7 @@ import {
 
 import { Loader2 } from "lucide-react";
 import { updateUserLevelAction, updateUserFeatureAction } from "./team.actions";
-import { FEATURES, hasFeatureAccess, type FeatureKey } from "@/lib/feature-access";
+import { FEATURES, featureAllowsLevel, hasFeatureAccess, type FeatureKey } from "@/lib/feature-access";
 import type { Level } from "./page";
 
 type ProfileRow = {
@@ -173,13 +173,14 @@ export default function TeamTable({
                 </TableCell>
                 {FEATURES.map((feature) => {
                   const enabled = hasFeatureAccess(p, feature.key);
+                  const eligible = featureAllowsLevel(feature.key, lvl);
                   return <TableCell key={feature.key}>
                     <button
                       type="button"
                       role="switch"
                       aria-checked={enabled}
                       aria-label={`${feature.label} access for ${email}`}
-                      disabled={!isAdmin || lvl === 1 || busyId !== null || pending}
+                      disabled={!isAdmin || lvl === 1 || !eligible || busyId !== null || pending}
                       onClick={() => onChangeFeature(p.id, feature.key, !enabled)}
                       className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${enabled ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}
                     >
@@ -187,6 +188,7 @@ export default function TeamTable({
                       {enabled ? "On" : "Off"}
                     </button>
                     {lvl === 1 && <p className="mt-1 text-xs text-muted-foreground">Always enabled</p>}
+                    {!eligible && <p className="mt-1 text-xs text-muted-foreground">Requires Admin or Content Team</p>}
                   </TableCell>;
                 })}
               </TableRow>

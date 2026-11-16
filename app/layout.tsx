@@ -9,7 +9,7 @@ import Link from "next/link";
 import type { PropsWithChildren, ReactNode } from "react";
 import "three-dots/dist/three-dots.css";
 import "./globals.css";
-import { BarChart3, Bot, Database, Files, Users, FlaskConical, Radar } from "lucide-react";
+import { BarChart3, Bot, Database, Files, Users, FlaskConical, Radar, BadgeDollarSign } from "lucide-react";
 
 // 1. Import the new server client creator
 import { createClient } from "./utils/supabase/server";
@@ -34,6 +34,7 @@ export default async function RootLayout({ children }: PropsWithChildren) {
     "/chatbot-prompt-testing": <FlaskConical className="h-4 w-4" />,
     "/chartwell-website-performance": <Database className="h-4 w-4" />,
     "/chartwell-geo": <Radar className="h-4 w-4" />,
+    "/sitecore-pricing": <BadgeDollarSign className="h-4 w-4" />,
     "/team": <Users className="h-4 w-4" />,
   };
   const chatbotMenuLinks = ChatbotLinks.map((link) => ({
@@ -49,6 +50,7 @@ export default async function RootLayout({ children }: PropsWithChildren) {
     ? await supabase.from("profiles").select("level, feature_access").eq("id", user.id).single()
     : { data: null };
   const visibleLinks = Links.filter((link) => {
+    if (link.href === "/sitecore-pricing" && profile?.level !== 1 && profile?.level !== 2) return false;
     const feature = featureForPath(link.href);
     return !feature || hasFeatureAccess(profile, feature);
   });

@@ -180,3 +180,26 @@ describe("app/team/team.actions", () => {
     expect(revalidatePathMock).toHaveBeenCalledWith("/team");
   });
 });
+
+describe("Suite Pricing team feature action", () => {
+  function featureCaller(level: number) {
+    const query = buildCallerQuery(level);
+    const rpc = vi.fn().mockResolvedValue({ error: null });
+    createClientMock.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "admin-1", email_confirmed_at: "2026-01-01" } }, error: null }) }, from: vi.fn().mockReturnValue(query), rpc });
+    return rpc;
+  }
+  it.each([true, false])("lets an admin set the pricing grant to %s and refreshes navigation", async enabled => {
+    const rpc = featureCaller(1);
+    const { updateUserFeatureAction } = await import("@/app/team/team.actions");
+    const userId = "00000000-0000-4000-8000-000000000002";
+    expect(await updateUserFeatureAction({ userId, feature: "sitecore_pricing", enabled })).toEqual({});
+    expect(rpc).toHaveBeenCalledWith("set_profile_feature_access", { p_user_id: userId, p_feature: "sitecore_pricing", p_enabled: enabled });
+    expect(revalidatePathMock).toHaveBeenCalledWith("/", "layout");
+  });
+  it.each([2, 3])("rejects changes by role %s before the database mutation", async level => {
+    const rpc = featureCaller(level);
+    const { updateUserFeatureAction } = await import("@/app/team/team.actions");
+    expect(await updateUserFeatureAction({ userId: "00000000-0000-4000-8000-000000000002", feature: "sitecore_pricing", enabled: true })).toEqual({ error: "Only admins can change feature access." });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+});
