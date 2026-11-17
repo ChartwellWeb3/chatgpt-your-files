@@ -10,6 +10,8 @@ import { PRICE_FIELDS, PRICING_ENVIRONMENTS, type PricingEnvironment, type Prici
 type Bootstrap = { setup: { ready: boolean; host?: string; message?: string; configHash?: string; timezone?: string }; jobs: PricingImport[] };
 type ProductionPrompt = { kind: "select" } | { kind: "upload"; file: File } | { kind: "command"; id: string; action: "run" | "retry"; filename: string; host: string };
 type Detail = { job: PricingImport; rows: PricingRow[]; counts: Record<string, number>; total: number; pageSize: number };
+type ResultFilter = "all" | PricingRow["status"];
+const resultStatuses: PricingRow["status"][] = ["applied", "invalid", "unchanged", "skipped", "conflict", "failed", "pending", "ready", "applying"];
 const busyStatuses = ["preview_queued", "previewing", "apply_queued", "applying"];
 const labels: Record<string, string> = { uploaded: "Ready to run", preview_queued: "Queued", previewing: "Preparing updates", review: "Previous manual import", apply_queued: "Updates queued", applying: "Updating prices", completed: "Finished", failed: "Stopped — needs attention", cancelled: "Cancelled", ready: "Waiting to update", unchanged: "Unchanged", invalid: "Needs correction", applied: "Updated", conflict: "Content changed", pending: "Preparing", skipped: "Skipped" };
 const fieldLabels = { regularPrice: "Regular", promotionPrice: "Promotion", startDate: "Start", endDate: "End" };
@@ -34,6 +36,7 @@ export default function PricingDashboard() {
   const client = useQueryClient();
   const [environment, setEnvironment] = useState<PricingEnvironment>("dev");
   const [productionPrompt, setProductionPrompt] = useState<ProductionPrompt | null>(null);
+  const [resultFilter, setResultFilter] = useState<ResultFilter>("all");
   const [activeId, setActiveId] = useState(""); const [page, setPage] = useState(0);
   const [working, setWorking] = useState(false); const [actionError, setActionError] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -41,15 +44,15 @@ export default function PricingDashboard() {
   const [deleteError, setDeleteError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const bootstrap = useQuery({ queryKey: ["sitecore-pricing", "bootstrap", environment], queryFn: () => fetch(`/api/sitecore/pricing?environment=${environment}`, { cache: "no-store" }).then(responseData<Bootstrap>), refetchInterval: 10000, retry: false });
-  const detail = useQuery({ queryKey: ["sitecore-pricing", "import", activeId, environment, page], enabled: Boolean(activeId),
-    queryFn: () => fetch(`/api/sitecore/pricing?environment=${environment}&view=import&id=${activeId}&page=${page}`, { cache: "no-store" }).then(responseData<Detail>),
+  const detail = useQuery({ queryKey: ["sitecore-pricing", "import", activeId, environment, page, resultFilter], enabled: Boolean(activeId),
+    queryFn: () => fetch(`/api/sitecore/pricing?environment=${environment}&view=import&id=${activeId}&page=${page}${resultFilter === "all" ? "" : `&status=${resultFilter}`}`, { cache: "no-store" }).then(responseData<Detail>),
     refetchInterval: query => busyStatuses.includes(query.state.data?.job.status || "") ? 3000 : false, retry: false });
   useEffect(() => { if (!activeId && bootstrap.data?.jobs[0]) setActiveId(bootstrap.data.jobs[0].id); }, [activeId, bootstrap.data]);
   const setup = bootstrap.data?.setup; const job = detail.data?.job; const counts = detail.data?.counts || {};
   const busy = Boolean(job && busyStatuses.includes(job.status));
   const totalTargets = Object.values(counts).reduce((sum, value) => sum + Number(value), 0);
   const progress = Math.min(100, Math.max(0, job?.progress || 0));
-  const selectJob = (id: string) => { setActiveId(id); setPage(0); setActionError(""); };
+  const selectJob = (id: string) => { setActiveId(id); setPage(0); setResultFilter("all"); setActionError(""); };
   const refresh = () => client.invalidateQueries({ queryKey: ["sitecore-pricing"] });
   async function sendCommand(id: string, action: "run" | "retry" | "cancel", targetEnvironment: PricingEnvironment, confirmProduction = false) {
     await responseData<{ saved: boolean }>(await fetch("/api/sitecore/pricing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, action, environment: targetEnvironment, confirmProduction, ...(confirmProduction ? { confirmedHost: setup?.host, confirmedConfigHash: setup?.configHash } : {}) }) }));
@@ -114,15 +117,24 @@ export default function PricingDashboard() {
   }
   function resultTable() {
     return <div className="overflow-hidden rounded-xl border bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
+        <h3 className="font-medium">Results</h3>
+        <div className="flex items-center gap-2"><label htmlFor="pricing-result-filter" className="text-sm text-muted-foreground">Filter by result</label>
+          <select id="pricing-result-filter" value={resultFilter} disabled={working} className="h-10 rounded-md border bg-background px-3 text-sm" onChange={event => { setResultFilter(event.target.value as ResultFilter); setPage(0); }}>
+            <option value="all">All results ({totalTargets})</option>
+            {resultStatuses.map(status => <option key={status} value={status}>{labels[status]} ({counts[status] || 0})</option>)}
+          </select>
+        </div>
+      </div>
       <div className="overflow-x-auto"><table className="w-full text-left text-sm">
         <thead className="bg-muted/40 text-xs text-muted-foreground"><tr><th className="p-4">Residence / suite</th><th className="p-4">Prices and dates</th><th className="p-4">Result</th></tr></thead>
-        <tbody className="divide-y">{detail.data?.rows.map(row => <tr key={row.id} className="align-top">
+        <tbody className="divide-y">{detail.data?.rows.map(row => <tr key={row.id} className={row.status === "invalid" ? "align-top bg-red-500/5" : "align-top"}>
           <td className="min-w-[210px] p-4"><p className="font-medium">{row.source.residence || "Unnamed residence"}</p>
             <p className="mt-1 text-xs text-muted-foreground">{row.source.propertyId} · {row.source.careLevel.toUpperCase()} · {row.source.suiteTitle}</p>
             <p className="mt-1 text-xs text-muted-foreground">Excel row {row.row_number} · {row.language.toUpperCase()}</p>
           </td>
           <td className="min-w-[260px] p-4"><dl className="space-y-1">{PRICE_FIELDS.map(field => <div key={field} className="grid grid-cols-[70px_1fr] gap-2 text-xs"><dt className="text-muted-foreground">{fieldLabels[field]}</dt><dd>{row.after_values ? <>{displayValue(field, row.before_values?.[field], setup?.timezone || "America/Toronto")} → {displayValue(field, row.after_values[field], setup?.timezone || "America/Toronto")}</> : row.source.values[field] === "" ? "Clear" : row.source.values[field] || "Keep existing"}</dd></div>)}</dl></td>
-          <td className="min-w-[180px] max-w-md p-4"><span className="text-xs">{labels[row.status] || row.status}</span>
+          <td className="min-w-[180px] max-w-md p-4"><span className={row.status === "invalid" ? "inline-flex rounded-full border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-300" : "text-xs"}>{labels[row.status] || row.status}</span>
           </td>
         </tr>)}</tbody>
       </table></div>
