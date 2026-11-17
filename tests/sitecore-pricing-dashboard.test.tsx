@@ -7,16 +7,19 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import PricingDashboard from "@/app/sitecore-pricing/pricing-dashboard";
 let client: QueryClient;
 afterEach(() => { cleanup(); client?.clear(); vi.unstubAllGlobals(); });
-function setup(options: { diagnostics?: boolean; failed?: boolean } = {}) {
+function setup(options: { diagnostics?: boolean; failed?: boolean; resultPages?: boolean } = {}) {
   const id = "00000000-0000-4000-8000-000000000001";
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "https://manager.test");
     const environment = url.searchParams.get("environment") || "dev";
-    const job = { id, filename: "tracker.xlsx", created_at: "2026-11-17T12:00:00Z", environment, target_host: `https://${environment}.test`, config_hash: "hash", status: options.failed ? "failed" : options.diagnostics ? "completed" : "uploaded", execution_mode: "edge_auto", error_message: options.diagnostics ? "Private job diagnostic" : null };
-    const rows = options.diagnostics ? [{ id: "row", row_number: 10, language: "en", status: "invalid", source: { propertyId: "11295", residence: "Example residence", careLevel: "th", suiteTitle: "townhouse-1bed-2beds", values: {}, warnings: ["Private row warning"] }, message: "Private row diagnostic" }] : [];
+    const job = { id, filename: "tracker.xlsx", created_at: "2026-11-17T12:00:00Z", environment, target_host: `https://${environment}.test`, config_hash: "hash", status: options.failed ? "failed" : options.diagnostics || options.resultPages ? "completed" : "uploaded", execution_mode: "edge_auto", error_message: options.diagnostics ? "Private job diagnostic" : null };
+    const allRows = options.resultPages ? Array.from({ length: 52 }, (_, index) => ({ id: `row-${index}`, row_number: index + 10, language: "en", status: index % 2 ? "applied" : "invalid", source: { propertyId: "11295", residence: `Residence ${index + 1}`, careLevel: "il", suiteTitle: "1bed", values: {}, warnings: [] }, message: "" })) : options.diagnostics ? [{ id: "row", row_number: 10, language: "en", status: "invalid", source: { propertyId: "11295", residence: "Example residence", careLevel: "th", suiteTitle: "townhouse-1bed-2beds", values: {}, warnings: ["Private row warning"] }, message: "Private row diagnostic" }] : [];
+    const filteredRows = url.searchParams.get("status") ? allRows.filter(row => row.status === url.searchParams.get("status")) : allRows;
+    const page = Number(url.searchParams.get("page") || 0);
+    const rows = filteredRows.slice(page * 25, (page + 1) * 25);
     const value = init?.method === "POST" ? (init.body instanceof FormData ? { id } : { saved: true })
-      : url.searchParams.get("view") === "import" ? { job, counts: options.diagnostics ? { invalid: 1 } : {}, rows, developerCount: options.diagnostics ? 1 : 0, total: rows.length, pageSize: 25 }
-      : { setup: { ready: true, host: `https://${environment}.test`, configHash: "hash" }, jobs: options.diagnostics ? [job] : [] };
+      : url.searchParams.get("view") === "import" ? { job, counts: options.resultPages ? { invalid: 26, applied: 26 } : options.diagnostics ? { invalid: 1 } : {}, rows, developerCount: options.diagnostics ? 1 : 0, total: filteredRows.length, pageSize: 25 }
+      : { setup: { ready: true, host: `https://${environment}.test`, configHash: "hash" }, jobs: options.diagnostics || options.resultPages ? [job] : [] };
     return { ok: true, json: async () => value } as Response;
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -41,6 +44,28 @@ describe("pricing environment selection and production dialogs", () => {
     for (const message of ["Private job diagnostic", "Private row warning", "Private row diagnostic"]) expect(screen.queryByText(message)).not.toBeInTheDocument();
     if (failed) expect(screen.getAllByText("Stopped — needs attention").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "Download report" })).toBeInTheDocument();
+  });
+  it("filters results on the server, resets pagination, and preserves the filter on following pages", async () => {
+    const f = setup({ resultPages: true }); await screen.findByText("Residence 1");
+    await f.user.click(screen.getByRole("button", { name: "Next" }));
+    await screen.findByText("Residence 26");
+    await f.user.selectOptions(screen.getByLabelText("Filter by result"), "invalid");
+    await screen.findByText("Residence 1");
+    expect(screen.getByLabelText("Filter by result")).toHaveValue("invalid");
+    expect(screen.queryByText("Residence 2")).not.toBeInTheDocument();
+    expect(screen.getByText("26 targets · Page 1")).toBeInTheDocument();
+    expect(f.fetchMock.mock.calls.some(([url]) => String(url).includes("page=0&status=invalid"))).toBe(true);
+    await f.user.click(screen.getByRole("button", { name: "Next" }));
+    await screen.findByText("Residence 51");
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    expect(f.fetchMock.mock.calls.some(([url]) => String(url).includes("page=1&status=invalid"))).toBe(true);
+    await f.user.selectOptions(screen.getByLabelText("Filter by result"), "all");
+    await screen.findByText("Residence 2"); expect(screen.getByText("52 targets · Page 1")).toBeInTheDocument();
+    await f.user.selectOptions(screen.getByLabelText("Filter by result"), "invalid");
+    await f.user.selectOptions(screen.getByLabelText("Sitecore environment"), "qa");
+    await screen.findByText("Target: https://qa.test");
+    await waitFor(() => expect(screen.getByLabelText("Filter by result")).toHaveValue("all"));
+    expect(f.posts()).toHaveLength(0);
   });
   it("keeps DEV selected and sends no writes when the production selection is cancelled", async () => {
     const f = setup(); await screen.findByText("Target: https://dev.test");
