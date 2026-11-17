@@ -7,10 +7,13 @@ export const maxDuration = 240;
 
 export async function POST(request: Request) {
   try {
-    const { db, environment, user, level } = await authorize(request, true);
+    const { db, environment, user, level } = await authorize(request, true, false, true);
     const input = await body(request);
     const action = option(input.action, ["createBenchmark", "run", "runNow", "runAll", "test", "discover", "opportunities"]);
     if (action === "createBenchmark" && level !== 1) throw new GeoError("Only an administrator can configure a benchmark.", 403);
+    if (level === 3 && !["run", "runNow", "runAll", "test", "discover"].includes(action)) {
+      throw new GeoError("This AI Visibility action requires Content Team access.", 403);
+    }
     if (["run", "runNow", "runAll", "test"].includes(action)) {
       const runtime = checked(await db.from("geo_worker_runtime").select("dispatcher_enabled").eq("id", true).single());
       if (!runtime?.dispatcher_enabled) throw new GeoError("The GEO worker dispatcher is not activated. Ask an administrator to complete the deployment steps.", 503);

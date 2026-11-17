@@ -22,7 +22,7 @@ Login and access levels come from the **original chatbot Supabase project**. GEO
 
 Questions have a topic, market, language (`en` or `fr`), brand-name classification, approval state, revision, and `schedule_included` flag. Blue **Without brand names** badges identify discovery questions; purple **With brand names** badges identify questions naming Chartwell or another operator. Questions and Answers both show these badges.
 
-New and AI-suggested questions are drafts, labeled **Needs review** in the library. Levels 1–2 can approve or archive them. Editing wording or measurement tags requires approval again. Historical runs retain the wording, tags, and version captured when queued. Edits, archival, or removed approval before collection begins cancel obsolete pending work; analysis already underway uses the collected answer's saved snapshot.
+New and AI-suggested questions are drafts, labeled **Needs review** in the library. Anyone with AI Visibility access, including Basic users, can add, edit, approve, archive, suggest, test, and run questions or choose Monday questions. Editing wording or measurement tags requires approval again. Historical runs retain the wording, tags, and version captured when queued. Edits, archival, or removed approval before collection begins cancel obsolete pending work; analysis already underway uses the collected answer's saved snapshot.
 
 | Action | Question set | Statistics |
 | --- | --- | --- |
@@ -138,11 +138,11 @@ Benchmarks freeze independent GEO models, prompts, and measurement settings. Sha
 | Capability | Admin (1) | Content team (2) | Basic (3) |
 | --- | --- | --- | --- |
 | View GEO results, evidence, reviews, and Guide | Yes | Yes | Yes |
-| Manage questions/Monday checkboxes; Test, Run now, Run all | Yes | Yes | No |
-| Retry/cancel reporting batches; save branded factual reviews; generate suggestions/opportunities | Yes | Yes | No |
+| Manage questions/Monday checkboxes; suggest questions; Test, Run now, Run all | Yes | Yes | Yes |
+| Retry/cancel reporting batches; save branded factual reviews; generate opportunities | Yes | Yes | No |
 | Verify/recheck mappings; create benchmarks; enable/pause schedules | Yes | No | No |
 
-Original-project authorization precedes performance data access. Original Auth actor UUIDs are audit fields; performance SQL does not depend on copied profiles, cross-project Auth foreign keys, or original-user `auth.uid()` policies. Performance tables use RLS and private service access. No performance/worker credentials reach the browser.
+Every role requires AI Visibility feature access (administrators bypass feature switches). Original-project authorization precedes performance data access. Basic writes are explicitly limited to question management, question suggestions, and collection/test actions; other writes retain their role checks. Original Auth actor UUIDs are audit fields; performance SQL does not depend on copied profiles, cross-project Auth foreign keys, or original-user `auth.uid()` policies. Performance tables use RLS and private service access. No performance/worker credentials reach the browser.
 
 Website configuration: existing original Auth variables plus `PERFORMANCE_SUPABASE_URL`, `PERFORMANCE_SUPABASE_SECRET_KEY`, `PERFORMANCE_ENVIRONMENT=qa|prod`, `OPENAI_API_KEY`, `OPENAI_GEO_MONITOR_MODEL`, and `OPENAI_GEO_ANALYSIS_MODEL`. GEO never falls back to the chatbot's `OPENAI_ANALYSIS_MODEL`.
 

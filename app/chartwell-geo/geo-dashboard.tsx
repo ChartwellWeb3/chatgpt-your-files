@@ -145,7 +145,7 @@ export default function GeoDashboard({ environment }: { environment: Environment
     <header className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
       <div>
         <div className="mb-2 flex items-center gap-2 text-xs font-medium text-emerald-400"><Radar className="h-4 w-4"/>Chartwell · AI monitoring</div>
-        <div className="flex flex-wrap items-center gap-3"><h1 className="text-2xl font-semibold tracking-tight md:text-3xl">AI visibility</h1><span className="rounded border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{environment}</span>{data?.level === 3 && <span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">View only</span>}</div>
+        <div className="flex flex-wrap items-center gap-3"><h1 className="text-2xl font-semibold tracking-tight md:text-3xl">AI visibility</h1><span className="rounded border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{environment}</span></div>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">See when AI mentions Chartwell, which competitors appear, and the sources behind each answer.</p>
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">

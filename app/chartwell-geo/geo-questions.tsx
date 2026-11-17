@@ -19,7 +19,8 @@ export function Questions({ bootstrap, benchmarkId, from, to, scope, onScopeChan
   onRun: (question: Question, purpose: "monitoring" | "test") => void; onRunAll: () => Promise<unknown>; onBenchmarkChange: (id: string) => void; onSetup: () => void;
   onViewAnswers: (question: Question) => void;
 }) {
-  const canEdit = bootstrap.level < 3;
+  // This component is available only after the AI Visibility feature access check.
+  const canEdit = true;
   const [confirmAll, setConfirmAll] = useState(false);
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
