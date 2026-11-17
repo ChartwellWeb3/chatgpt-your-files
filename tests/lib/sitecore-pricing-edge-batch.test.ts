@@ -7,8 +7,8 @@ import { runPricingEdgeBatch } from "@/lib/sitecore-pricing/edge-batch";
 import { MissingSuiteVersionError, PricingBatchYield, type PricingConfig, type PricingImport, type PricingRow } from "@/lib/sitecore-pricing/types";
 
 const config: PricingConfig = { environment: "dev", host: "https://dev.test", endpoint: "https://dev.test/authoring", clientId: "id", clientSecret: "secret", root: "/sitecore/content/Home", timezone: "America/Toronto", propertyTemplateId: "property", suiteTemplateId: "suite", hash: "a".repeat(64), fields: { regularPrice: "Regular SuitePrice", promotionPrice: "Promotion Price", startDate: "Start Date", endDate: "End Date" } };
-function fixture() {
-  const row = { id: "row", status: "ready", language: "en", source: { propertyId: "11295", careLevel: "il" }, residence_item_id: "property-id", residence_path: `${config.root}/edward`,
+function fixture(language: "en" | "fr" = "en") {
+  const row = { id: "row", status: "ready", language, source: { propertyId: "11295", careLevel: "il" }, residence_item_id: "property-id", residence_path: `${config.root}/edward`,
     item_id: "suite-id", item_path: `${config.root}/edward/Data/SuitePlans/il/1bed`, item_version: 1, revision: "before", before_values: { regularPrice: "4000" }, after_values: { regularPrice: "4100" } } as PricingRow;
   const job = { environment: "dev", id: "job", config_hash: config.hash, target_host: config.host, content_root: config.root, run_requested_at: "2026-11-16T00:00:00Z", lease_token: "token", execution_mode: "edge_auto", edge_stage: "apply", phase: "apply", status: "applying" } as PricingImport;
   const events: string[] = [];
@@ -29,7 +29,7 @@ function fixture() {
     return query;
   }) } as unknown as SupabaseClient;
   const api = new SitecoreAuthoring(config);
-  const suite: SitecoreItem = { id: "suite-id", name: "1bed", path: row.item_path!, templateId: "suite", language: "en", version: 1, propertyId: "", revision: "before", locked: false, lockStateKnown: true, fieldsPresent: true, values: { regularPrice: "4000" } };
+  const suite: SitecoreItem = { id: "suite-id", name: "1bed", path: row.item_path!, templateId: "suite", language, version: 1, propertyId: "", revision: "before", locked: false, lockStateKnown: true, fieldsPresent: true, values: { regularPrice: "4000" } };
   const property = { ...suite, id: "property-id", path: row.residence_path!, templateId: "property", propertyId: "11295" };
   vi.spyOn(api, "verifyTemplates").mockResolvedValue({ property, suite });
   const get = vi.spyOn(api, "get").mockImplementation(async id => id === "property-id" ? property : suite);
@@ -52,11 +52,23 @@ describe("resumable pricing Edge updates", () => {
   it("verifies a blank-promotion clear and does not write it twice after resuming", async () => {
     const f = fixture();
     f.suite.values = { regularPrice: "4000", promotionPrice: "3900", startDate: "20260101T050000Z", endDate: "20260201T045959Z" };
-    f.row.before_values = { ...f.suite.values }; f.row.after_values = { ...f.suite.values, promotionPrice: "" };
+    f.row.before_values = { ...f.suite.values }; f.row.after_values = { ...f.suite.values, promotionPrice: "", startDate: "", endDate: "" };
     f.update.mockImplementation(async () => { f.events.push("mutation"); f.suite.values = { ...f.row.after_values }; f.suite.revision = "after"; });
     await runPricingEdgeBatch(f.db, f.api);
-    expect(f.row.status).toBe("applied"); expect(f.suite.values).toEqual({ ...f.row.before_values, promotionPrice: "" });
+    expect(f.row.status).toBe("applied"); expect(f.suite.values).toEqual({ ...f.row.before_values, promotionPrice: "", startDate: "", endDate: "" });
     await runPricingEdgeBatch(f.db, f.api); expect(f.update).toHaveBeenCalledTimes(1);
+  });
+  it("updates FR-only residences using FR property identity during apply", async () => {
+    const f = fixture("fr");
+    f.get.mockImplementation(async (id, language) => language === "fr" ? id === "property-id" ? f.property : f.suite : null);
+    await runPricingEdgeBatch(f.db, f.api);
+    expect(f.row.status).toBe("applied"); expect(f.update).toHaveBeenCalledOnce();
+    expect(f.get).toHaveBeenCalledWith("property-id", "fr", undefined, "property");
+  });
+  it("skips missing residence language versions without writing", async () => {
+    const f = fixture(); f.get.mockResolvedValue(null);
+    await runPricingEdgeBatch(f.db, f.api);
+    expect(f.row.status).toBe("skipped"); expect(f.update).not.toHaveBeenCalled();
   });
   it("preserves a human edit rather than applying an obsolete snapshot", async () => {
     const f = fixture(); f.suite.values = { regularPrice: "4200" }; f.suite.revision = "human-edit";

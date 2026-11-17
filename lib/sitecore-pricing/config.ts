@@ -45,8 +45,8 @@ export function getPricingConfig(env: Record<string, string | undefined> = proce
   const timezone = setting("TIMEZONE") || "America/Toronto";
   try { new Intl.DateTimeFormat("en", { timeZone: timezone }).format(); } catch { throw new PricingError("The pricing timezone is invalid.", 503); }
   const fields = { regularPrice: "Regular SuitePrice", promotionPrice: "Promotion Price", startDate: "Start Date", endDate: "End Date" };
-  // Blank promotions now clear existing values. The policy hash requires a new
-  // upload, so saved imports from the preserve-all policy are never reinterpreted.
-  const hash = createHash("sha256").update(JSON.stringify({ execution: "edge-auto-v1", ...(environment === "dev" ? {} : { environment }), host: url.origin, root, timezone, propertyTemplateId, suiteTemplateId, fields, suiteAliases: SUITE_ALIASES, careLevels: PRICING_CARE_LEVELS, residenceMatches: "all", languages: ["en", "fr"], blanks: { regularPrice: "preserve", promotionPrice: "clear", startDate: "preserve", endDate: "preserve" }, endDate: "inclusive" })).digest("hex");
+  // Promotion inputs are all-or-none and discovery covers EN and FR. Changing
+  // this policy requires a new upload; older queued sources are not reinterpreted.
+  const hash = createHash("sha256").update(JSON.stringify({ execution: "edge-auto-v1", ...(environment === "dev" ? {} : { environment }), host: url.origin, root, timezone, propertyTemplateId, suiteTemplateId, fields, suiteAliases: SUITE_ALIASES, careLevels: PRICING_CARE_LEVELS, catalogLanguages: ["en", "fr"], promotionInput: "all-three-or-none-v1", residenceMatches: "all", languages: ["en", "fr"], blanks: { regularPrice: "preserve", promotionPrice: "clear-with-dates", startDate: "required-with-promotion", endDate: "required-with-promotion" }, endDate: "inclusive" })).digest("hex");
   return { environment, host: url.origin, endpoint: `${url.origin}/sitecore/api/authoring/graphql/v1/`, clientId, clientSecret, root, timezone, propertyTemplateId, suiteTemplateId, fields, hash };
 }

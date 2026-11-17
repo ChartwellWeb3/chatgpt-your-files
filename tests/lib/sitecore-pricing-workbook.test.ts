@@ -65,18 +65,34 @@ describe("2026 pricing workbook contract", () => {
     expect(result.rows[0]).toMatchObject({ values: { promotionPrice: "" }, errors: [] });
     expect(result.rows[0].skipReason).toBeUndefined();
     expect(result.rows[0].values).not.toHaveProperty("regularPrice");
-    expect(result.rows[0].values).not.toHaveProperty("startDate");
-    expect(result.rows[0].values).not.toHaveProperty("endDate");
+    expect(result.rows[0].values.startDate).toBe("");
+    expect(result.rows[0].values.endDate).toBe("");
   });
   it("blocks duplicate keys between a clear-only row and a priced row", async () => {
     const empty = row(); empty[8] = "";
     const result = await parsePricingWorkbook(await fixture([empty, row()]));
     expect(result.rows.every(source => source.errors.some(error => error.includes("Duplicate matching key")))).toBe(true);
   });
-  it("keeps incomplete notes without pricing as neutral skips", async () => {
-    const note = row(); note[8] = ""; note[2] = ""; note[5] = ""; note[7] = "";
-    const result = await parsePricingWorkbook(await fixture([note]));
-    expect(result.rows[0]).toMatchObject({ values: {}, skipReason: "empty_update" });
+  it("omits suites with no Marketing Care Level even when prices are present", async () => {
+    const unmarketed = row(); unmarketed[5] = "  ";
+    const result = await parsePricingWorkbook(await fixture([unmarketed, row("studio")]));
+    expect(result.rows).toHaveLength(1); expect(result.rows[0].rowNumber).toBe(11);
+    expect(result.rows[0].suiteTitle).toBe("studio"); expect(result.rows[0].errors).toEqual([]);
+  });
+  it.each([
+    ["5400", "", ""], ["", "2026-01-01", "2026-01-31"], ["5400", "2026-01-01", ""],
+    ["5400", "", "2026-01-31"], ["", "2026-01-01", ""], ["", "", "2026-01-31"],
+  ])("blocks an incomplete promotion (%s, %s, %s) even when regular price changes", async (price, start, end) => {
+    const data = row(); data[8] = "999"; data[9] = price; data[10] = start; data[11] = end;
+    const result = await parsePricingWorkbook(await fixture([data]));
+    expect(result.rows[0].errors.join(" ")).toContain("must all be supplied together");
+    expect(result.rows[0].values.regularPrice).toBe("999"); expect(result.rows[0].skipReason).toBeUndefined();
+  });
+  it("reports unsupported nonempty care levels even when promotion fields are blank", async () => {
+    const data = row(); data[5] = "unknown"; data[8] = "";
+    const result = await parsePricingWorkbook(await fixture([data]));
+    expect(result.rows[0].errors).toContain("Missing or unsupported Marketing Care Level.");
+    expect(result.rows[0].skipReason).toBeUndefined();
   });
   it.each(["TH", "th", "IL"])("accepts the townhouse suite title with %s care level", async care => {
     const townhouse = row("townhouse-1bed-2beds"); townhouse[5] = care;
@@ -123,20 +139,21 @@ describe("promotion date and preserve rules", () => {
     expect(sitecoreDate("2026-11-01", false, "America/Toronto")).toBe("20261101T040000Z");
     expect(sitecoreDate("2026-11-01", true, "America/Toronto")).toBe("20261102T045959Z");
   });
-  it("clears only the promotion price and preserves blank regular/date fields", () => {
+  it("removes promotion price and dates together while keeping the regular price", () => {
     const source: PricingSource = { rowNumber: 10, propertyId: "11263", residence: "Example", careLevel: "th", suiteTitle: "townhouse-1bed-2beds", values: { promotionPrice: "" }, errors: [], warnings: [] };
     const current = { regularPrice: "5801", promotionPrice: "5600", startDate: "20260101T050000Z", endDate: "20260201T045959Z" };
     const after = proposedValues(source, current, "America/Toronto");
-    expect(after).toEqual({ ...current, promotionPrice: "" });
-    expect(changedFields(current, after)).toEqual({ promotionPrice: "" });
+    expect(after).toEqual({ regularPrice: "5801", promotionPrice: "", startDate: "", endDate: "" });
+    expect(changedFields(current, after)).toEqual({ promotionPrice: "", startDate: "", endDate: "" });
     expect(changedFields(after, proposedValues(source, after, "America/Toronto"))).toEqual({});
-    expect(proposedValues(source, { ...current, startDate: "20260301T050000Z" }, "America/Toronto")).toEqual({ ...current, startDate: "20260301T050000Z", promotionPrice: "" });
   });
-  it("preserves existing promotion fields and checks the resulting date interval", () => {
-    const source: PricingSource = { rowNumber: 10, propertyId: "11263", residence: "Example", careLevel: "il", suiteTitle: "1bed", values: { regularPrice: "6000" }, errors: [], warnings: [] };
+  it("requires a complete promotion even when Sitecore has reusable dates or prices", () => {
+    const source: PricingSource = { rowNumber: 10, propertyId: "11263", residence: "Example", careLevel: "il", suiteTitle: "1bed", values: { regularPrice: "999" }, errors: [], warnings: [] };
     const current = { regularPrice: "5801", promotionPrice: "5600", startDate: "20260101T050000Z", endDate: "20260201T045959Z" };
-    expect(proposedValues(source, current, "America/Toronto")).toEqual({ ...current, regularPrice: "6000" });
-    expect(() => proposedValues({ ...source, values: { startDate: "2026-03-01" } }, current, "America/Toronto")).toThrow("precedes");
-    expect(() => proposedValues({ ...source, values: { promotionPrice: "5400" } }, { regularPrice: "5801" }, "America/Toronto")).toThrow("both start and end");
+    expect(() => proposedValues({ ...source, values: { regularPrice: "999", promotionPrice: "5400" } }, current, "America/Toronto")).toThrow("must all be supplied together");
+    expect(() => proposedValues({ ...source, values: { regularPrice: "999", startDate: "2026-01-01", endDate: "2026-01-31" } }, current, "America/Toronto")).toThrow("must all be supplied together");
+    expect(current.regularPrice).toBe("5801");
+    expect(proposedValues({ ...source, values: { regularPrice: "999", promotionPrice: "5400", startDate: "2026-01-01", endDate: "2026-01-31" } }, current, "America/Toronto")).toMatchObject({ regularPrice: "999", promotionPrice: "5400", startDate: "20260101T050000Z", endDate: "20260201T045959Z" });
+    expect(() => proposedValues({ ...source, values: { promotionPrice: "5400", startDate: "2026-03-01", endDate: "2026-01-31" } }, current, "America/Toronto")).toThrow("precedes");
   });
 });

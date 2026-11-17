@@ -63,11 +63,15 @@ export function normalizeMentions(extraction: unknown, answer: string, brands: B
     const evidenceQuote = savedEvidenceQuote(row.evidence_quote, answer);
     const quote = normalize(evidenceQuote);
     if (!quote.includes(normalize(row.observed_name))) throw new EvidenceValidationError("Observed brand name is missing from its evidence quote.");
-    const observedMatch = brands.find(brand => [brand.name, ...brand.aliases].some(alias => normalize(String(row.observed_name)) === normalize(alias)));
-    const namedMatch = brands.find(brand => [brand.name, ...brand.aliases].some(alias => normalize(String(row.name)) === normalize(alias)));
+    const observedMatches = brands.filter(brand => [brand.name, ...brand.aliases].some(alias => normalize(String(row.observed_name)) === normalize(alias)));
+    const namedMatches = brands.filter(brand => [brand.name, ...brand.aliases].some(alias => normalize(String(row.name)) === normalize(alias)));
+    const observedMatch = observedMatches.length === 1 ? observedMatches[0] : undefined;
+    const namedMatch = namedMatches.length === 1 ? namedMatches[0] : undefined;
     const matched = observedMatch || namedMatch;
-    // A model-supplied ID alone never proves a brand match.
-    if (row.brand_id !== null && row.brand_id !== observedMatch?.id && row.brand_id !== namedMatch?.id) throw new EvidenceValidationError("Brand ID is not supported by the observed name.");
+    // Resolve IDs from catalog names/aliases, never from a model-supplied ID.
+    // The model can swap valid IDs even when it extracts the names correctly.
+    // Evidence and ownership checks below must still pass before counting a mention.
+    if (!matched && row.brand_id !== null && observedMatches.length < 2 && namedMatches.length < 2) throw new EvidenceValidationError("Brand ID is not supported by the observed name.");
     const slug = matched?.slug || normalize(row.name).replace(/ /g, "-");
     if (!slug || slug.length > 180) throw new EvidenceValidationError("Could not normalize brand name.");
     const position = row.position;
@@ -78,7 +82,7 @@ export function normalizeMentions(extraction: unknown, answer: string, brands: B
     const unsupportedParent = namedMatch
       ? ![namedMatch.name, ...namedMatch.aliases].some(alias => quote.includes(normalize(alias)))
       : !observedMatch && !quote.includes(normalize(row.name));
-    if (conflictingParents || unsupportedParent) {
+    if (observedMatches.length > 1 || namedMatches.length > 1 || conflictingParents || unsupportedParent) {
       unresolved.push({ mention_index: index, observed_name: row.observed_name,
         proposed_brand_id: namedMatch?.id || null, proposed_brand_name: row.name,
         evidence_quote: evidenceQuote, raw_mention: { ...row } });

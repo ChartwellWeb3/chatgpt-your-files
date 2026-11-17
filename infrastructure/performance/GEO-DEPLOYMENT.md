@@ -2,6 +2,14 @@
 
 This update runs GEO collection in the **performance Supabase project**. Login and user permissions remain in the original chatbot project. All new SQL is supplied as new files; do not rerun or edit earlier installation scripts if they are already installed.
 
+## Swapped extraction brand IDs update — November 17
+
+Redeploy `geo-worker` in the **performance project** using the complete regenerated `deploy/geo-worker.dashboard.ts` file, retaining Verify JWT OFF and the existing secrets. No SQL, Cron, benchmark, or model changes are required.
+
+The validator now resolves brand IDs from unique catalog names/aliases instead of rejecting a correct name merely because the AI supplied another brand's ID. Exact evidence quotes, observed-name checks, ownership verification, and rank checks still apply. Multiple catalog matches and conflicting parent names require Mapping review; unsupported IDs without a catalog name match still fail validation. Original extraction responses remain saved for audit.
+
+After deployment, open the failed collection batch and select **Retry failed**. For an extraction failure with a saved answer, the retry queue reuses the collected answer and requests analysis again; it can incur an analysis API charge. Metrics update only after validation succeeds. No tests or builds were run for this update.
+
 ## Question groups and per-question metrics update — November 10
 
 For an existing GEO installation, run the entire new `sql/20261110150000_geo_question_metrics.sql` in the **performance SQL Editor**, then deploy the website. It requires the existing queue/reporting and schedule-checkbox schema. The file installs `geo_question_metrics_page` and a reporting-history index, with service-only permissions. **No worker redeployment, Cron change, new secrets, or model changes are needed.** Do not rerun earlier SQL files.
