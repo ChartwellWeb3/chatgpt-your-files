@@ -40,7 +40,7 @@ describe("pricing environment selection and production dialogs", () => {
     expect(screen.queryByText(/Issue \/ warning|with issues or warnings|Issues or warnings are available/)).not.toBeInTheDocument();
     for (const message of ["Private job diagnostic", "Private row warning", "Private row diagnostic"]) expect(screen.queryByText(message)).not.toBeInTheDocument();
     if (failed) expect(screen.getAllByText("Stopped — needs attention").length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: "Download updates report" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Download report" })).toBeInTheDocument();
   });
   it("keeps DEV selected and sends no writes when the production selection is cancelled", async () => {
     const f = setup(); await screen.findByText("Target: https://dev.test");

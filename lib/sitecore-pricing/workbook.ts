@@ -1,7 +1,7 @@
 import JSZip from "jszip";
 import { SaxesParser } from "saxes";
 import path from "node:path";
-import { PricingError, PRICING_CARE_LEVELS, canonicalSuite, type PricingSource } from "./types.ts";
+import { PricingError, PRICING_CARE_LEVELS, canonicalSuite, promotionInputError, type PricingSource } from "./types.ts";
 
 type Cell = { value: string; type: string; formula: boolean };
 type SheetRow = { number: number; cells: Record<string, Cell> };
@@ -136,15 +136,12 @@ export async function parsePricingWorkbook(bytes: Uint8Array) {
   for (const row of raw.filter(r => r.number > header.number)) {
     const get = (key: keyof typeof HEADERS): Cell => row.cells[columns[key]] || { value: "", type: "n", formula: false };
     if (!Object.keys(HEADERS).some(key => get(key as keyof typeof HEADERS).value.trim())) continue;
+    // C2C intentionally omits care level for suites not marketed on the website.
+    if (!get("careLevel").value.trim()) continue;
     const source: PricingSource = { rowNumber: row.number, propertyId: get("propertyId").value.trim(), residence: get("residence").value.trim(), careLevel: get("careLevel").value.trim().toLowerCase(), suiteTitle: canonicalSuite(get("suiteTitle").value), values: {}, errors: [], warnings: [] };
-    const updateFields = ["regularPrice", "promotionPrice", "startDate", "endDate"] as const;
-    const noInputs = updateFields.every(field => { const cell = get(field); return !cell.value.trim() && !cell.formula && cell.type !== "e"; });
     if (!/^\d{1,12}$/.test(source.propertyId)) source.errors.push("Missing or invalid Web Property ID.");
     if (!PRICING_CARE_LEVELS.some(level => level === source.careLevel)) source.errors.push("Missing or unsupported Marketing Care Level.");
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(source.suiteTitle)) source.errors.push("Missing or invalid Web SuiteTitle.");
-    // Keep note/incomplete rows with no update inputs as neutral skips. A valid
-    // target with no inputs now has an actionable promotion-clear operation.
-    if (noInputs && source.errors.length) source.skipReason = "empty_update";
     for (const field of ["regularPrice", "promotionPrice", "startDate", "endDate"] as const) {
       try {
         const cell = get(field);
@@ -157,11 +154,16 @@ export async function parsePricingWorkbook(bytes: Uint8Array) {
         if (cell.formula) source.warnings.push(`${HEADERS[field]} uses Excel's saved formula result. Recalculate and save before uploading.`);
       } catch (error) { source.errors.push(error instanceof Error ? error.message : "Invalid cell value."); }
     }
+    const promotionError = promotionInputError(source.values);
+    if (promotionError && !source.errors.includes(promotionError)) source.errors.push(promotionError);
+    if (!promotionError && source.values.promotionPrice === "") {
+      source.values.startDate = ""; source.values.endDate = "";
+    }
     if (source.values.startDate && source.values.endDate && source.values.endDate < source.values.startDate) source.errors.push("Promotion end date precedes its start date.");
     if (source.values.promotionPrice && source.values.regularPrice && Number(source.values.promotionPrice) > Number(source.values.regularPrice)) source.warnings.push("Promotion price exceeds the regular price.");
     rows.push(source);
   }
-  if (!rows.length) throw new PricingError("The pricing sheet has no data rows.");
+  if (!rows.length) throw new PricingError("The pricing sheet has no rows with a Marketing Care Level. Rows without one are intentionally excluded.");
   const keys = new Map<string, PricingSource[]>();
   for (const row of rows) { if (row.skipReason === "empty_update") continue; const key = `${row.propertyId}|${row.careLevel}|${row.suiteTitle}`; keys.set(key, [...(keys.get(key) || []), row]); }
   keys.forEach(duplicates => { if (duplicates.length > 1) for (const row of duplicates) row.errors.push(`Duplicate matching key on Excel rows ${duplicates.map(r => r.rowNumber).join(", ")}.`); });

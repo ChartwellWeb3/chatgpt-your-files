@@ -129,48 +129,51 @@ describe("production pricing API", () => {
   });
 });
 
-describe("pricing updates-only CSV export", () => {
+describe("pricing results report with actionable issues", () => {
   const id = "00000000-0000-4000-8000-000000000001";
-  function row(status: string, index: number) {
+  function row(status: string, index: number, careLevel = "th") {
     return { id: `row-${index}`, import_id: id, row_number: index + 10, language: "en", status,
-      source: { propertyId: "11295", residence: `${status}-${index}`, careLevel: "th", suiteTitle: "townhouse-1bed-2beds", warnings: ["hidden formula warning"] },
+      source: { propertyId: "11295", residence: `${status}-${index}`, careLevel, suiteTitle: "townhouse-1bed-2beds", values: { regularPrice: "999" }, errors: [], warnings: ["Saved formula warning"] },
       residence_path: "/sitecore/content/Home/edward", item_path: "/sitecore/content/Home/edward/Data/SuitePlans/th/townhouse-1bed-2beds",
-      before_values: { regularPrice: "4000", promotionPrice: "3900" }, after_values: { regularPrice: "4100", promotionPrice: "" }, message: "hidden diagnostic" };
+      before_values: { regularPrice: "4000", promotionPrice: "3900" }, after_values: { regularPrice: "999", promotionPrice: "" }, message: "Detailed result" };
   }
   function fixture(rows: ReturnType<typeof row>[]) {
     auth(2);
     const ranges = vi.fn(); const predicates = vi.fn();
     mocks.createPerformanceClient.mockReturnValue({ from: vi.fn((table: string) => {
       if (table === "sitecore_pricing_imports") {
-        const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: { id, environment: "dev" }, error: null }) };
-        return query;
+        const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: { id, environment: "dev" }, error: null }) }; return query;
       }
-      const filters: Record<string, string> = {};
-      const query = { select: () => query, eq: (key: string, value: string) => { predicates(key, value); filters[key] = value; return query; }, order: () => query,
-        range: async (start: number, end: number) => { ranges(start, end); return { data: rows.filter(item => Object.entries(filters).every(([key, value]) => (item as Record<string, unknown>)[key] === value)).slice(start, end + 1), error: null }; } };
+      const equal: Record<string, string> = {}; const unequal: Record<string, string> = {};
+      const value = (item: ReturnType<typeof row>, key: string) => key === "source->>careLevel" ? item.source.careLevel : (item as Record<string, unknown>)[key];
+      const query = { select: () => query,
+        eq: (key: string, input: string) => { equal[key] = input; return query; },
+        neq: (key: string, input: string) => { predicates(key, input); unequal[key] = input; return query; }, order: () => query,
+        range: async (start: number, end: number) => { ranges(start, end); return { data: rows.filter(item => Object.entries(equal).every(([key, input]) => value(item, key) === input) && Object.entries(unequal).every(([key, input]) => value(item, key) !== input)).slice(start, end + 1), error: null }; } };
       return query;
     }) });
     return { ranges, predicates, request: () => GET(new Request(`https://manager.test/api/sitecore/pricing?view=export&id=${id}&environment=dev`)) };
   }
-  it("exports applied rows and promotion clears without unsuccessful rows or diagnostics", async () => {
-    const f = fixture(["applied", "unchanged", "skipped", "failed", "invalid", "conflict", "pending", "ready", "applying"].map(row));
+  it("includes successful, unchanged and unsuccessful updates with detailed messages", async () => {
+    const f = fixture(["applied", "unchanged", "skipped", "failed", "invalid", "conflict", "pending", "ready", "applying"].map((status, index) => row(status, index)));
     const response = await f.request(); const csv = await response.text();
-    expect(response.status).toBe(200); expect(csv.split("\r\n")).toHaveLength(2);
-    expect(csv).toContain('"applied-0"'); expect(csv).toContain('"3900",""');
-    for (const status of ["unchanged", "skipped", "failed", "invalid", "conflict", "pending", "ready", "applying"]) expect(csv).not.toContain(`"${status}-`);
-    for (const text of ['"Message"', '"Warnings"', "hidden diagnostic", "hidden formula warning", "Proposed regularPrice"]) expect(csv).not.toContain(text);
-    expect(csv).toContain("Updated promotionPrice"); expect(f.predicates).toHaveBeenCalledWith("status", "applied");
+    expect(response.status).toBe(200); expect(csv.split("\r\n")).toHaveLength(9);
+    for (const status of ["applied", "unchanged", "failed", "invalid", "conflict", "pending", "ready", "applying"]) expect(csv).toContain(`"${status}-`);
+    expect(csv).not.toContain('"skipped-'); expect(csv).toContain('"3900",""');
+    for (const text of ['"Message"', '"Warnings"', "Detailed result", "Saved formula warning", "Requested regularPrice"]) expect(csv).toContain(text);
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
   });
-  it("returns a header-only report when no targets were updated", async () => {
-    const f = fixture([row("unchanged", 0), row("failed", 1)]);
+  it("excludes blank Marketing Care Level and expected missing-language skips", async () => {
+    const f = fixture([row("invalid", 0, ""), row("skipped", 1), row("failed", 2)]);
     const csv = await (await f.request()).text();
-    expect(csv.split("\r\n")).toHaveLength(1); expect(csv).toContain("Updated regularPrice");
+    expect(csv.split("\r\n")).toHaveLength(2); expect(csv).toContain('"failed-2"');
+    expect(csv).not.toContain('"invalid-0"'); expect(csv).not.toContain('"skipped-1"');
+    expect(f.predicates).toHaveBeenCalledWith("source->>careLevel", "");
   });
-  it("paginates the applied subset without dropping updates beyond 1000 rows", async () => {
-    const rows = Array.from({ length: 1001 }, (_, index) => [row("applied", index), row("skipped", index)]).flat();
+  it("paginates included outcomes without dropping entries beyond 1000 rows", async () => {
+    const rows = Array.from({ length: 1001 }, (_, index) => [row("failed", index), row("skipped", index)]).flat();
     const f = fixture(rows); const csv = await (await f.request()).text();
-    expect(csv.split("\r\n")).toHaveLength(1002); expect(csv).toContain('"applied-1000"');
+    expect(csv.split("\r\n")).toHaveLength(1002); expect(csv).toContain('"failed-1000"');
     expect(f.ranges.mock.calls).toEqual([[0, 999], [1000, 1999]]);
   });
 });

@@ -51,6 +51,16 @@ export class MissingSuiteVersionError extends PricingError {
     this.name = "MissingSuiteVersionError";
   }
 }
+export class MissingResidenceVersionError extends PricingError {
+  constructor(language: string) {
+    super(`No existing ${language.toUpperCase()} residence version; skipped.`);
+    this.name = "MissingResidenceVersionError";
+  }
+}
+export function promotionInputError(values: PriceValues): string | undefined {
+  const count = (["promotionPrice", "startDate", "endDate"] as const).filter(field => Boolean(values[field]?.trim())).length;
+  if (count > 0 && count < 3) return "Promotion Price, Start Date and End Date must all be supplied together, or all left blank to remove the promotion. This row was not updated.";
+}
 export class ContentFolderNotFoundError extends PricingError {
   constructor(path: string) { super(`Content folder not found: ${path}.`); this.name = "ContentFolderNotFoundError"; }
 }

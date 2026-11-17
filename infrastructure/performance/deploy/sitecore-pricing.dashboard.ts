@@ -54,6 +54,16 @@ export class MissingSuiteVersionError extends PricingError {
     this.name = "MissingSuiteVersionError";
   }
 }
+export class MissingResidenceVersionError extends PricingError {
+  constructor(language: string) {
+    super(`No existing ${language.toUpperCase()} residence version; skipped.`);
+    this.name = "MissingResidenceVersionError";
+  }
+}
+export function promotionInputError(values: PriceValues): string | undefined {
+  const count = (["promotionPrice", "startDate", "endDate"] as const).filter(field => Boolean(values[field]?.trim())).length;
+  if (count > 0 && count < 3) return "Promotion Price, Start Date and End Date must all be supplied together, or all left blank to remove the promotion. This row was not updated.";
+}
 export class ContentFolderNotFoundError extends PricingError {
   constructor(path: string) { super(`Content folder not found: ${path}.`); this.name = "ContentFolderNotFoundError"; }
 }
@@ -123,9 +133,9 @@ export function getPricingConfig(env: Record<string, string | undefined> = Deno.
   const timezone = setting("TIMEZONE") || "America/Toronto";
   try { new Intl.DateTimeFormat("en", { timeZone: timezone }).format(); } catch { throw new PricingError("The pricing timezone is invalid.", 503); }
   const fields = { regularPrice: "Regular SuitePrice", promotionPrice: "Promotion Price", startDate: "Start Date", endDate: "End Date" };
-  // Blank promotions now clear existing values. The policy hash requires a new
-  // upload, so saved imports from the preserve-all policy are never reinterpreted.
-  const hash = createHash("sha256").update(JSON.stringify({ execution: "edge-auto-v1", ...(environment === "dev" ? {} : { environment }), host: url.origin, root, timezone, propertyTemplateId, suiteTemplateId, fields, suiteAliases: SUITE_ALIASES, careLevels: PRICING_CARE_LEVELS, residenceMatches: "all", languages: ["en", "fr"], blanks: { regularPrice: "preserve", promotionPrice: "clear", startDate: "preserve", endDate: "preserve" }, endDate: "inclusive" })).digest("hex");
+  // Promotion inputs are all-or-none and discovery covers EN and FR. Changing
+  // this policy requires a new upload; older queued sources are not reinterpreted.
+  const hash = createHash("sha256").update(JSON.stringify({ execution: "edge-auto-v1", ...(environment === "dev" ? {} : { environment }), host: url.origin, root, timezone, propertyTemplateId, suiteTemplateId, fields, suiteAliases: SUITE_ALIASES, careLevels: PRICING_CARE_LEVELS, catalogLanguages: ["en", "fr"], promotionInput: "all-three-or-none-v1", residenceMatches: "all", languages: ["en", "fr"], blanks: { regularPrice: "preserve", promotionPrice: "clear-with-dates", startDate: "required-with-promotion", endDate: "required-with-promotion" }, endDate: "inclusive" })).digest("hex");
   return { environment, host: url.origin, endpoint: `${url.origin}/sitecore/api/authoring/graphql/v1/`, clientId, clientSecret, root, timezone, propertyTemplateId, suiteTemplateId, fields, hash };
 }
 
@@ -182,10 +192,15 @@ export function sitecoreDate(day: string, end: boolean, timezone: string): strin
 }
 
 export function proposedValues(source: PricingSource, current: PriceValues, timezone: string): PriceValues {
+  const error = promotionInputError(source.values);
+  if (error) throw new PricingError(error);
   const values = { ...current };
   for (const field of PRICE_FIELDS) if (source.values[field] !== undefined) {
     const value = source.values[field]!;
-    values[field] = field === "startDate" || field === "endDate" ? sitecoreDate(value, field === "endDate", timezone) : value;
+    values[field] = (field === "startDate" || field === "endDate") && value ? sitecoreDate(value, field === "endDate", timezone) : value;
+  }
+  if (source.values.promotionPrice === "") {
+    values.promotionPrice = ""; values.startDate = ""; values.endDate = "";
   }
   if (values.promotionPrice && (!values.startDate || !values.endDate)) throw new PricingError("The resulting promotion needs both start and end dates. Blank cells preserve existing dates.");
   if ((values.promotionPrice || source.values.startDate || source.values.endDate) && values.startDate && values.endDate && values.endDate < values.startDate) throw new PricingError("The resulting promotion end date precedes its start date.");
@@ -273,28 +288,63 @@ export class SitecoreAuthoring {
     const result = await this.graphql<{ item: RawItem | null }>(`query PricingItem($where:${this.itemInput}!){item(where:$where){${this.selection} ${selection}}}`, { where });
     return result.item ? this.item(result.item) : null;
   }
+  // Only identity/shared fields use a merged language view. Pricing reads and
+  // mutations always use a verified, existing version in the requested language.
+  private mergeIdentityItems(items: SitecoreItem[]): SitecoreItem[] {
+    const merged = new Map<string, SitecoreItem>();
+    for (const item of items) {
+      const key = normalizedId(item.id); const previous = merged.get(key);
+      if (previous && (previous.path !== item.path || normalizedId(previous.templateId) !== normalizedId(item.templateId)
+        || (previous.propertyId && item.propertyId && previous.propertyId !== item.propertyId))) {
+        throw new PricingError("The item identity or shared PropertyID differs between EN and FR. Refresh the import after checking Sitecore.", 503);
+      }
+      if (!previous || (!previous.propertyId && item.propertyId)) merged.set(key, item);
+    }
+    return Array.from(merged.values());
+  }
+  async getProperty(identifier: string): Promise<SitecoreItem | null> {
+    const items = await Promise.all((["en", "fr"] as const).map(language => this.get(identifier, language, undefined, "property")));
+    return this.mergeIdentityItems(items.filter((item): item is SitecoreItem => item !== null))[0] || null;
+  }
+  async getResidence(identifier: string, language: string): Promise<SitecoreItem> {
+    const item = await this.get(identifier, language, undefined, "property");
+    if (!item || item.language !== language || !Number.isInteger(item.version) || item.version < 1) throw new MissingResidenceVersionError(language);
+    return item;
+  }
   async children(parent: string): Promise<SitecoreItem[]> {
-    await this.connect(); const items: SitecoreItem[] = []; let after: string | null = null;
+    const items: SitecoreItem[] = []; let after: string | null = null;
     for (let page = 0; page < 100; page++) {
-      const result: { item: { children: { nodes: RawItem[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } } | null } = await this.graphql(`query PricingChildren($path:String!,$after:String){item(where:{database:"master",path:$path}){children(first:100,after:$after){nodes{${this.selection}} pageInfo{hasNextPage endCursor}}}}`, { path: parent, after });
-      if (!result.item) throw new ContentFolderNotFoundError(parent);
-      items.push(...result.item.children.nodes.map(raw => this.item(raw)));
-      const info = result.item.children.pageInfo;
-      if (!info.hasNextPage) return items;
-      if (!info.endCursor || info.endCursor === after) break;
-      after = info.endCursor;
+      const result = await this.childrenPage(parent, after);
+      items.push(...result.items);
+      if (!result.cursor) return this.mergeIdentityItems(items);
+      after = result.cursor;
     }
     throw new PricingError("The content folder is too large or its pagination is incomplete.");
   }
-  // One durable catalog page per step, rather than scanning the full tree in
-  // a function invocation. PropertyID is shared, so no language fallback is used.
+  // Both language cursors share the existing durable text checkpoint. No schema
+  // change is needed, and a French-only item is never hidden by an English scan.
   async childrenPage(parent: string, after: string | null) {
     await this.connect();
-    const result = await this.graphql<{ item: { children: { nodes: RawItem[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } } | null }>(`query PricingCatalogPage($path:String!,$after:String){item(where:{database:"master",path:$path}){children(first:100,after:$after){nodes{${this.selection} propertyId:field(name:"PropertyID"){value}} pageInfo{hasNextPage endCursor}}}}`, { path: parent, after });
-    if (!result.item) throw new ContentFolderNotFoundError(parent);
-    const { nodes, pageInfo } = result.item.children;
-    if (pageInfo.hasNextPage && (!pageInfo.endCursor || pageInfo.endCursor === after)) throw new PricingError("The catalog pagination did not advance.", 503);
-    return { items: nodes.map(raw => this.item(raw)), cursor: pageInfo.hasNextPage ? pageInfo.endCursor : null };
+    type Cursor = { en: string | null | false; fr: string | null | false };
+    let cursors: Cursor = { en: null, fr: null };
+    if (after !== null) {
+      try {
+        const saved = JSON.parse(after);
+        if (!saved || saved.v !== 1 || !["en", "fr"].every(language => saved[language] === false || saved[language] === null || typeof saved[language] === "string")) throw new Error();
+        cursors = { en: saved.en, fr: saved.fr };
+      } catch { throw new PricingError("Invalid bilingual catalog checkpoint. Upload a new import.", 503); }
+    }
+    const pages = await Promise.all((["en", "fr"] as const).map(async language => {
+      if (cursors[language] === false) return { language, exists: false, items: [] as SitecoreItem[], next: false as const };
+      const result = await this.graphql<{ item: { children: { nodes: RawItem[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } } | null }>(`query PricingCatalogPage($path:String!,$after:String,$language:String!){item(where:{database:"master",path:$path,language:$language}){children(first:100,after:$after){nodes{${this.selection} propertyId:field(name:"PropertyID"){value}} pageInfo{hasNextPage endCursor}}}}`, { path: parent, after: cursors[language], language });
+      if (!result.item) return { language, exists: false, items: [] as SitecoreItem[], next: false as const };
+      const { nodes, pageInfo } = result.item.children;
+      if (pageInfo.hasNextPage && (!pageInfo.endCursor || pageInfo.endCursor === cursors[language])) throw new PricingError("The catalog pagination did not advance.", 503);
+      return { language, exists: true, items: nodes.map(raw => this.item(raw)), next: pageInfo.hasNextPage ? pageInfo.endCursor! : false as const };
+    }));
+    if (after === null && !pages.some(page => page.exists)) throw new ContentFolderNotFoundError(parent);
+    for (const page of pages) cursors[page.language] = page.next;
+    return { items: this.mergeIdentityItems(pages.flatMap(page => page.items)), cursor: cursors.en === false && cursors.fr === false ? null : JSON.stringify({ v: 1, ...cursors }) };
   }
   async verifyTemplates(): Promise<{ property: SitecoreItem; suite: SitecoreItem }> {
     await this.connect();
@@ -319,7 +369,7 @@ export class SitecoreAuthoring {
       if (++visited > 1500) throw new PricingError("The content tree is too large. Configure a narrower pricing content root.");
       for (const child of await this.children(parent.path)) {
         if (normalizedId(child.templateId) === normalizedId(this.config.propertyTemplateId)) {
-          const property = await this.get(child.id, undefined, undefined, "property");
+          const property = await this.getProperty(child.id);
           if (!property) throw new PricingError("A residence changed while the catalog was being read. Retry the preview.", 503);
           residences.push(property);
         }
@@ -373,7 +423,7 @@ export class SitecoreAuthoring {
 function data<T>(result: { data: T; error: unknown }): T { if (result.error) throw result.error; return result.data; }
 type CatalogTask = { path: string; depth: number; cursor: string | null };
 type CatalogResidence = { item_id: string; path: string; property_id: string };
-const neutral = (error: unknown) => error instanceof MissingSuiteVersionError || error instanceof MissingSuiteFolderError;
+const neutral = (error: unknown) => error instanceof MissingSuiteVersionError || error instanceof MissingSuiteFolderError || error instanceof MissingResidenceVersionError;
 
 // All writes go through leased RPCs. A deadline yields without failing a row;
 // the next invocation resumes the exact saved stage, catalog page, or write.
@@ -401,7 +451,7 @@ export async function runPricingEdgeBatch(db: SupabaseClient, api: SitecoreAutho
           // A residence itself is also a valid configured root.
           let root: SitecoreItem | null = null;
           if (task.path === api.config.root && task.cursor === null) {
-            root = await api.get(task.path, undefined, undefined, "property");
+            root = await api.getProperty(task.path);
             if (!root) throw new PricingError("The configured content root was not found.", 503);
           }
           const rootIsProperty = root && normalizedId(root.templateId) === normalizedId(api.config.propertyTemplateId);
@@ -432,7 +482,7 @@ export async function runPricingEdgeBatch(db: SupabaseClient, api: SitecoreAutho
               await rpc("sitecore_pricing_expand_row", { p_row_id: row.id, p_residences: matches.map(item => ({ id: item.item_id, path: item.path })) });
             } else {
               if (!row.residence_item_id || !row.residence_path) throw new PricingError("The saved residence target is incomplete.", 503);
-              const property = await api.get(row.residence_item_id, undefined, undefined, "property");
+              const property = await api.getResidence(row.residence_item_id, row.language);
               if (!property || property.path !== row.residence_path || property.propertyId !== row.source.propertyId
                 || normalizedId(property.templateId) !== normalizedId(api.config.propertyTemplateId)) throw new PricingError("The residence changed during discovery. Upload and run again.");
               const item = await api.resolve(row.source, row.language, [property]);
@@ -454,7 +504,7 @@ export async function runPricingEdgeBatch(db: SupabaseClient, api: SitecoreAutho
         if (row) {
           try {
             if (!row.item_id || !row.before_values || !row.after_values || !row.residence_item_id) throw new PricingError("Saved update snapshot is incomplete.");
-            const property = await api.get(row.residence_item_id, undefined, undefined, "property");
+            const property = await api.getResidence(row.residence_item_id, row.language);
             if (!property || property.path !== row.residence_path || property.propertyId !== row.source.propertyId
               || normalizedId(property.templateId) !== normalizedId(api.config.propertyTemplateId)) throw new PricingError("The residence moved or its Web Property ID changed. Upload and run again.");
             const current = await api.get(row.item_id, row.language);
