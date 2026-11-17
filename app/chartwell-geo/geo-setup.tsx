@@ -51,7 +51,7 @@ export function GettingStarted({ bootstrap, benchmarkId, onSetup, onQuestions, o
 }) {
   const steps = [
     { title: "Choose your AI setup", description: "A benchmark keeps answers collected with the same models together.", status: benchmarkId ? "Benchmark ready" : "Benchmark needed", complete: Boolean(benchmarkId), action: bootstrap.level === 1 && !benchmarkId ? onSetup : undefined, button: "Open setup" },
-    { title: "Add and approve questions", description: "Use questions a family might ask when looking for a retirement residence.", status: `${bootstrap.counts.active} approved · ${bootstrap.counts.draft} awaiting review`, complete: bootstrap.counts.active > 0, action: onQuestions, button: bootstrap.level < 3 ? "Manage questions" : "View questions" },
+    { title: "Add and approve questions", description: "Use questions a family might ask when looking for a retirement residence.", status: `${bootstrap.counts.active} approved · ${bootstrap.counts.draft} awaiting review`, complete: bootstrap.counts.active > 0, action: onQuestions, button: "Manage questions" },
     { title: "Collect and review answers", description: "Use Test to preview a draft without affecting statistics. Use Run now on approved questions, or enable Monday collection, for reporting.", status: "Monday schedule + Run now feed reporting", complete: false, action: benchmarkId ? onAnswers : undefined, button: "View answers" },
   ];
   return <section aria-label="How monitoring works" className="space-y-3">

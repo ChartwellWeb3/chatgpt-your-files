@@ -208,8 +208,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { db, environment, user, level } = await authorize(request, true);
+    const { db, environment, user, level } = await authorize(request, true, false, true);
     const input = await body(request);
+    if (level === 3 && !["saveQuestion", "questionStatus", "questionSchedule"].includes(String(input.action))) {
+      throw new GeoError("This GEO action requires Content Team access.", 403);
+    }
     if (input.action === "verifyMapping" || input.action === "recheckMapping") {
       if (level !== 1) throw new GeoError("Only an administrator can verify brand ownership mappings.", 403);
       if (input.action === "recheckMapping") return json(requiredData(await db.rpc("geo_recheck_mapping", { p_environment: environment, p_run_id: uuid(input.runId) })), 202);

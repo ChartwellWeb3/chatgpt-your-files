@@ -126,12 +126,12 @@ export function Guide({ onNavigate }: { onNavigate: (tab: string) => void }) {
           </div>
         </Panel></div>
 
-        <div id="geo-guide-access" className="scroll-mt-6"><Panel title="9. Who can do what?" description="Your account's access level controls the available actions.">
-          <div className="overflow-x-auto"><table className="w-full min-w-[570px] text-left text-sm"><caption className="sr-only">GEO access by role</caption><thead className="border-b bg-muted/30 text-xs text-muted-foreground"><tr>{["Action", "Administrator", "Content team", "View-only"].map(label => <th key={label} scope="col" className="px-5 py-3 font-medium">{label}</th>)}</tr></thead><tbody className="divide-y">{[
+        <div id="geo-guide-access" className="scroll-mt-6"><Panel title="9. Who can do what?" description="These permissions apply to users with AI Visibility access.">
+          <div className="overflow-x-auto"><table className="w-full min-w-[570px] text-left text-sm"><caption className="sr-only">GEO access by role</caption><thead className="border-b bg-muted/30 text-xs text-muted-foreground"><tr>{["Action", "Administrator", "Content team", "Basic"].map(label => <th key={label} scope="col" className="px-5 py-3 font-medium">{label}</th>)}</tr></thead><tbody className="divide-y">{[
             ["View answers, metrics, tests, reviews, and this Guide", "Yes", "Yes", "Yes"],
-            ["Edit/approve questions and choose Monday questions", "Yes", "Yes", "—"],
-            ["Test, Run now, Run all, retry or cancel reporting collections", "Yes", "Yes", "—"],
-            ["Save branded factual reviews; generate suggestions/opportunities", "Yes", "Yes", "—"],
+            ["Add/edit/approve questions, suggest questions, and choose Monday questions", "Yes", "Yes", "Yes"],
+            ["Test, Run now, Run all", "Yes", "Yes", "Yes"],
+            ["Retry/cancel reporting collections; save branded factual reviews; generate opportunities", "Yes", "Yes", "—"],
             ["Verify operator mappings or recheck saved analysis", "Yes", "—", "—"],
             ["Create benchmarks; enable or pause weekly collection", "Yes", "—", "—"],
           ].map(([action, ...roles]) => <tr key={action}><th scope="row" className="px-5 py-4 font-medium">{action}</th>{roles.map((role, index) => <td key={index} className="px-5 py-4 text-muted-foreground">{role}</td>)}</tr>)}</tbody></table></div><p className="border-t p-5 text-sm leading-7 text-muted-foreground">QA and PROD have separate questions, run queues, schedules, and reporting. The operator catalog is shared. Your environment badge is selected by the application setup. Your usual sign-in continues to control access.</p>
@@ -151,7 +151,7 @@ export function Guide({ onNavigate }: { onNavigate: (tab: string) => void }) {
             ["Will verifying a test make it count in statistics?", "No. Verification resolves the operator relationship, but the answer keeps its original Test purpose. It remains in Test history and excluded from reporting. Use Run now on an approved question when you want a new reporting observation."],
             ["Why do my results change between collections?", "AI answers and available web sources can vary. A single answer is one observation. Look at the number of completed answers and the mix of questions before treating a change as a trend."],
             ["What do QA and PROD mean?", "QA is the testing environment and PROD is the production environment. Their questions, schedules, and results are separate. The badge shows which environment you are viewing."],
-            ["Why can I view results but cannot run or edit anything?", "Your account may have view-only access. Content team members and administrators can manage questions and start collections. Only administrators can verify residence/operator mappings, create benchmarks, and enable or pause schedules."],
+            ["Who can add, approve, or run questions?", "Anyone with AI Visibility access, including Basic users, can add, edit, approve, suggest, test, and run questions. Collection requires a configured benchmark and active worker. Administrators manage feature access, operator mappings, benchmarks, and weekly schedules."],
             ["Why is collection unavailable or stuck waiting?", "Check Overview → Weekly collection for the connection status. If it shows deployment is required or no recent connection, contact an administrator. You do not need to keep the page open or repeatedly click Run all. Your administrator can investigate the saved collection status."],
           ].map(([question, answer]) => <details key={question} className="group px-5 py-4"><summary className="cursor-pointer text-sm font-medium leading-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{question}</summary><p className="mt-3 text-sm leading-7 text-muted-foreground">{answer}</p></details>)}</div>
         </Panel></div>

@@ -27,7 +27,7 @@ export function failure(error: unknown) {
   console.error("GEO request failed", { code, type: error instanceof Error ? error.name : "DatabaseError" });
   return json({ error: "GEO could not complete this request. Try again or contact an administrator." }, 503);
 }
-export async function authorize(request?: Request, write = false, admin = false) {
+export async function authorize(request?: Request, write = false, admin = false, allowBasicWrite = false) {
   const auth = await createClient();
   const { data: { user }, error } = await auth.auth.getUser();
   if (error || !user) throw new GeoError("Sign in to use GEO monitoring.", 401);
@@ -36,7 +36,7 @@ export async function authorize(request?: Request, write = false, admin = false)
   if (profileError) throw new GeoError("Your access level could not be verified.", 503);
   if (!hasFeatureAccess(profile, "ai_visibility")) throw new GeoError("You do not have access to AI Visibility.", 403);
   const level: 1 | 2 | 3 = profile?.level === 1 ? 1 : profile?.level === 2 ? 2 : 3;
-  if ((write && level === 3) || (admin && level !== 1)) throw new GeoError("You do not have permission to make this change.", 403);
+  if ((write && level === 3 && !allowBasicWrite) || (admin && level !== 1)) throw new GeoError("You do not have permission to make this change.", 403);
   if (write && request) {
     const origin = request.headers.get("origin");
     if (origin && origin !== new URL(request.url).origin) throw new GeoError("Request origin is not allowed.", 403);
