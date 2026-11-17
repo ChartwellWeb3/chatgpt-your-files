@@ -2,7 +2,7 @@
 // Authored for later execution; tests/builds were not run during implementation.
 import { describe, expect, it, vi } from "vitest";
 import { SitecoreAuthoring, type SitecoreItem } from "@/lib/sitecore-pricing/authoring";
-import { ContentFolderNotFoundError, MissingSuiteFolderError, MissingSuiteVersionError, type PricingConfig, type PricingSource } from "@/lib/sitecore-pricing/types";
+import { ContentFolderNotFoundError, MissingSuiteFolderError, MissingSuiteVersionError, type PricingConfig, type PricingRow, type PricingSource } from "@/lib/sitecore-pricing/types";
 
 const root = "/sitecore/content/sxastarter/sxastarter/home/ab/calgary";
 const config: PricingConfig = { environment: "dev", host: "https://dev.test", endpoint: "https://dev.test/sitecore/api/authoring/graphql/v1/", clientId: "id", clientSecret: "secret", root, timezone: "America/Toronto", propertyTemplateId: "property-template", suiteTemplateId: "suite-template", hash: "hash", fields: { regularPrice: "Regular SuitePrice", promotionPrice: "Promotion Price", startDate: "Start Date", endDate: "End Date" } };
@@ -11,10 +11,27 @@ const property = (name = "the-edward"): SitecoreItem => ({ id: name, name, path:
 const suite = (name = "studios"): SitecoreItem => ({ id: name, name, path: `${root}/the-edward/Data/SuitePlans/il/${name}`, templateId: config.suiteTemplateId, version: 1, language: "en", propertyId: "", revision: "revision", locked: false, values: { regularPrice: "4500" }, fieldsPresent: true });
 
 describe("Calgary SuitePlan matching", () => {
+  it("sends an explicit empty promotion field to Sitecore without resetting regular prices or dates", async () => {
+    const api = new SitecoreAuthoring(config); const target = suite();
+    target.values = { regularPrice: "4500", promotionPrice: "4000", startDate: "20260101T050000Z", endDate: "20260201T045959Z" };
+    const graphql = vi.spyOn(api, "graphql").mockResolvedValue({ updateItem: { item: { itemId: target.id } } });
+    const row = { language: "en", after_values: { ...target.values, promotionPrice: "" } } as PricingRow;
+    await api.update(row, target);
+    expect(graphql).toHaveBeenCalledWith(expect.stringContaining("mutation PricingUpdate"), { input: { database: "master", itemId: target.id, language: "en", version: 1, fields: [{ name: "Promotion Price", value: "", reset: false }] } });
+  });
   it("treats a missing residence care-level folder as a neutral skip", async () => {
     const api = new SitecoreAuthoring(config);
     vi.spyOn(api, "children").mockRejectedValue(new ContentFolderNotFoundError(`${property().path}/Data/SuitePlans/al`));
     await expect(api.resolve({ ...source, careLevel: "al" }, "en", [property()])).rejects.toBeInstanceOf(MissingSuiteFolderError);
+  });
+  it.each(["en", "fr"])("resolves a TH townhouse under SuitePlans/th in %s", async language => {
+    const api = new SitecoreAuthoring(config);
+    const folder = `${property().path}/Data/SuitePlans/th`;
+    const target = { ...suite("townhouse-1bed-2beds"), language, path: `${folder}/townhouse-1bed-2beds` };
+    const children = vi.spyOn(api, "children").mockResolvedValue([target]);
+    const get = vi.spyOn(api, "get").mockResolvedValue(target);
+    expect(await api.resolve({ ...source, careLevel: "th", suiteTitle: "townhouse-1bed-2beds" }, language, [property()])).toEqual(target);
+    expect(children).toHaveBeenCalledWith(folder); expect(get).toHaveBeenCalledWith(target.id, language);
   });
   it("does not hide a missing catalog root as a row skip", async () => {
     const api = new SitecoreAuthoring(config);

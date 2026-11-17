@@ -7,14 +7,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import PricingDashboard from "@/app/sitecore-pricing/pricing-dashboard";
 let client: QueryClient;
 afterEach(() => { cleanup(); client?.clear(); vi.unstubAllGlobals(); });
-function setup() {
+function setup(options: { diagnostics?: boolean; failed?: boolean } = {}) {
   const id = "00000000-0000-4000-8000-000000000001";
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "https://manager.test");
     const environment = url.searchParams.get("environment") || "dev";
+    const job = { id, filename: "tracker.xlsx", created_at: "2026-11-17T12:00:00Z", environment, target_host: `https://${environment}.test`, config_hash: "hash", status: options.failed ? "failed" : options.diagnostics ? "completed" : "uploaded", execution_mode: "edge_auto", error_message: options.diagnostics ? "Private job diagnostic" : null };
+    const rows = options.diagnostics ? [{ id: "row", row_number: 10, language: "en", status: "invalid", source: { propertyId: "11295", residence: "Example residence", careLevel: "th", suiteTitle: "townhouse-1bed-2beds", values: {}, warnings: ["Private row warning"] }, message: "Private row diagnostic" }] : [];
     const value = init?.method === "POST" ? (init.body instanceof FormData ? { id } : { saved: true })
-      : url.searchParams.get("view") === "import" ? { job: { id, filename: "tracker.xlsx", environment, target_host: `https://${environment}.test`, config_hash: "hash", status: "uploaded", execution_mode: "edge_auto" }, counts: {}, rows: [], developerCount: 0, total: 0, pageSize: 25 }
-      : { setup: { ready: true, host: `https://${environment}.test`, configHash: "hash" }, jobs: [] };
+      : url.searchParams.get("view") === "import" ? { job, counts: options.diagnostics ? { invalid: 1 } : {}, rows, developerCount: options.diagnostics ? 1 : 0, total: rows.length, pageSize: 25 }
+      : { setup: { ready: true, host: `https://${environment}.test`, configHash: "hash" }, jobs: options.diagnostics ? [job] : [] };
     return { ok: true, json: async () => value } as Response;
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -29,6 +31,17 @@ async function selectProduction(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByText("Target: https://prod.test");
 }
 describe("pricing environment selection and production dialogs", () => {
+  it.each([false, true])("hides all issue/warning displays while keeping truthful import status (failed=%s)", async failed => {
+    setup({ diagnostics: true, failed });
+    await screen.findByText("Example residence");
+    expect(screen.getByRole("columnheader", { name: "Result" })).toBeInTheDocument();
+    expect(screen.getByText("Needs correction")).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /Developers/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Issue \/ warning|with issues or warnings|Issues or warnings are available/)).not.toBeInTheDocument();
+    for (const message of ["Private job diagnostic", "Private row warning", "Private row diagnostic"]) expect(screen.queryByText(message)).not.toBeInTheDocument();
+    if (failed) expect(screen.getAllByText("Stopped — needs attention").length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Download updates report" })).toBeInTheDocument();
+  });
   it("keeps DEV selected and sends no writes when the production selection is cancelled", async () => {
     const f = setup(); await screen.findByText("Target: https://dev.test");
     await f.user.selectOptions(screen.getByLabelText("Sitecore environment"), "prod");

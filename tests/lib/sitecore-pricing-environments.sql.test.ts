@@ -28,6 +28,13 @@ describe("multi-environment SQL and production authorization", () => {
     expect((await db.query("select id from sitecore_pricing_imports order by id")).rows).toEqual([qa, prod].sort().map(id => ({ id })));
     expect((await db.query<{ setup: unknown }>("select sitecore_pricing_schema_status() setup")).rows[0].setup).toMatchObject({ ready: true, missing: [], environments: ["dev", "qa", "prod"] });
   });
+  it("queues explicit blank-promotion clears as real targets without any SQL upgrade", async () => {
+    const clear = { ...source, values: { promotionPrice: "" } };
+    const id = (await db.query<{ id: string }>("select sitecore_pricing_upload_environment('tracker.xlsx',$1,'Market Rates and Business Cases','https://dev.test',$1,$2,$3,'/sitecore/content/Home','dev') id", [hash, actor, [clear]])).rows[0].id;
+    expect((await db.query<{ empty: boolean }>("select sitecore_pricing_is_empty_update($1) empty", [clear])).rows[0].empty).toBe(false);
+    expect((await db.query("select status,source->'values' as values from sitecore_pricing_rows where import_id=$1 order by language", [id])).rows).toEqual([{ status: "pending", values: { promotionPrice: "" } }, { status: "pending", values: { promotionPrice: "" } }]);
+    await command(id, "dev"); expect(await claim("dev")).toMatchObject({ id });
+  });
   it("requires production confirmation and records its actor, timestamp and hash", async () => {
     const id = await upload("prod");
     await expect(command(id, "prod")).rejects.toThrow("Production confirmation required");

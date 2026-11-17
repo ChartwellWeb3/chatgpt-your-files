@@ -31,13 +31,13 @@ export async function GET(request: Request) {
     if (view === "export") {
       const rows: PricingRow[] = [];
       for (let start = 0; ; start += 1000) {
-        const batch = checked(await db.from("sitecore_pricing_rows").select("*").eq("import_id", id).order("row_number").order("language").order("residence_path").order("id").range(start, start + 999)) as PricingRow[];
+        const batch = checked(await db.from("sitecore_pricing_rows").select("*").eq("import_id", id).eq("status", "applied").order("row_number").order("language").order("residence_path").order("id").range(start, start + 999)) as PricingRow[];
         rows.push(...batch); if (batch.length < 1000) break;
       }
       const csv = (v: unknown) => { let value = String(v ?? ""); if (/^[=+\-@\t\r]/.test(value)) value = `'${value}`; return `"${value.replace(/"/g, '""')}"`; };
       const fields = ["regularPrice", "promotionPrice", "startDate", "endDate"] as const;
-      const lines = [["Excel row", "Web Property ID", "Residence", "Matched residence", "Care level", "Suite", "Language", "Status", "Sitecore item", ...fields.flatMap(f => [`Previous ${f}`, `Proposed ${f}`]), "Message", "Warnings"]];
-      for (const row of rows) lines.push([String(row.row_number), row.source.propertyId, row.source.residence, row.residence_path || "", row.source.careLevel, row.source.suiteTitle, row.language, row.status, row.item_path || "", ...fields.flatMap(f => [row.before_values?.[f] || "", row.after_values?.[f] || ""]), row.message || "", row.status === "skipped" ? "" : row.source.warnings.join("; ")]);
+      const lines = [["Excel row", "Web Property ID", "Residence", "Matched residence", "Care level", "Suite", "Language", "Status", "Sitecore item", ...fields.flatMap(f => [`Previous ${f}`, `Updated ${f}`])]];
+      for (const row of rows) lines.push([String(row.row_number), row.source.propertyId, row.source.residence, row.residence_path || "", row.source.careLevel, row.source.suiteTitle, row.language, row.status, row.item_path || "", ...fields.flatMap(f => [row.before_values?.[f] || "", row.after_values?.[f] || ""])]);
       return new Response("\uFEFF" + lines.map(line => line.map(csv).join(",")).join("\r\n"), { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="sitecore-${job.environment}-pricing-${id}.csv"`, "Cache-Control": "private, no-store" } });
     }
     if (view !== "import") throw new PricingError("Unknown pricing view.");

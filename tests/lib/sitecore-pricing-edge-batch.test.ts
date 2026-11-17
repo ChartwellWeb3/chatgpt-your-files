@@ -49,6 +49,15 @@ describe("resumable pricing Edge updates", () => {
     await runPricingEdgeBatch(f.db, f.api);
     expect(f.row.status).toBe("applied"); expect(f.update).toHaveBeenCalledTimes(1);
   });
+  it("verifies a blank-promotion clear and does not write it twice after resuming", async () => {
+    const f = fixture();
+    f.suite.values = { regularPrice: "4000", promotionPrice: "3900", startDate: "20260101T050000Z", endDate: "20260201T045959Z" };
+    f.row.before_values = { ...f.suite.values }; f.row.after_values = { ...f.suite.values, promotionPrice: "" };
+    f.update.mockImplementation(async () => { f.events.push("mutation"); f.suite.values = { ...f.row.after_values }; f.suite.revision = "after"; });
+    await runPricingEdgeBatch(f.db, f.api);
+    expect(f.row.status).toBe("applied"); expect(f.suite.values).toEqual({ ...f.row.before_values, promotionPrice: "" });
+    await runPricingEdgeBatch(f.db, f.api); expect(f.update).toHaveBeenCalledTimes(1);
+  });
   it("preserves a human edit rather than applying an obsolete snapshot", async () => {
     const f = fixture(); f.suite.values = { regularPrice: "4200" }; f.suite.revision = "human-edit";
     await runPricingEdgeBatch(f.db, f.api);

@@ -1,5 +1,6 @@
 export const PRICE_FIELDS = ["regularPrice", "promotionPrice", "startDate", "endDate"] as const;
 export const PRICING_ENVIRONMENTS = ["dev", "qa", "prod"] as const;
+export const PRICING_CARE_LEVELS = ["il", "al", "mc", "sa", "ltc", "th"] as const;
 export type PricingEnvironment = typeof PRICING_ENVIRONMENTS[number];
 export type PriceField = typeof PRICE_FIELDS[number];
 export type PriceValues = Partial<Record<PriceField, string>>;
