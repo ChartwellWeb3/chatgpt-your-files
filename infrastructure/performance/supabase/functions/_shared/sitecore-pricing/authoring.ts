@@ -35,7 +35,7 @@ export function proposedValues(source: PricingSource, current: PriceValues, time
     values[field] = field === "startDate" || field === "endDate" ? sitecoreDate(value, field === "endDate", timezone) : value;
   }
   if (values.promotionPrice && (!values.startDate || !values.endDate)) throw new PricingError("The resulting promotion needs both start and end dates. Blank cells preserve existing dates.");
-  if (values.startDate && values.endDate && values.endDate < values.startDate) throw new PricingError("The resulting promotion end date precedes its start date.");
+  if ((values.promotionPrice || source.values.startDate || source.values.endDate) && values.startDate && values.endDate && values.endDate < values.startDate) throw new PricingError("The resulting promotion end date precedes its start date.");
   return values;
 }
 export function sameValues(a: PriceValues, b: PriceValues): boolean { return PRICE_FIELDS.every(key => (a[key] || "") === (b[key] || "")); }

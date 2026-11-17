@@ -3,7 +3,7 @@
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
 import { parsePricingWorkbook } from "@/lib/sitecore-pricing/workbook";
-import { proposedValues, sitecoreDate } from "@/lib/sitecore-pricing/authoring";
+import { changedFields, proposedValues, sitecoreDate } from "@/lib/sitecore-pricing/authoring";
 import type { PricingSource } from "@/lib/sitecore-pricing/types";
 
 const headers = ["Region", "PropertyID - Yardi Number", "Web Property ID - Yardi Number", "Residence", "Yardi Care Level", "Marketing Care Level", "Yardi Suite Type Description", "Web SuiteTitle", "Regular SuitePrice", "PromotionPrice", "Start Date", "End Date"];
@@ -35,7 +35,7 @@ describe("2026 pricing workbook contract", () => {
     expect(result.headerRow).toBe(9);
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]).toMatchObject({ rowNumber: 10, propertyId: "11263", careLevel: "il", suiteTitle: "1bed", values: { regularPrice: "5801" }, errors: [] });
-    expect(result.rows[0].values).not.toHaveProperty("promotionPrice");
+    expect(result.rows[0].values.promotionPrice).toBe("");
   });
   it("blocks every duplicate key, including 2bed/2beds/2bedroom aliases", async () => {
     const result = await parsePricingWorkbook(await fixture([row("2bed"), row("2beds"), row("2bedroom")]));
@@ -59,11 +59,38 @@ describe("2026 pricing workbook contract", () => {
     expect(result.rows[0].errors.join(" ")).toContain("positive price");
     expect(result.rows[1].errors.join(" ")).toContain("without a saved result");
   });
-  it("marks empty update rows as skipped without making a priced row a duplicate", async () => {
+  it("clears promotions for valid rows with no price/date inputs instead of skipping them", async () => {
+    const empty = row(); empty[8] = "";
+    const result = await parsePricingWorkbook(await fixture([empty]));
+    expect(result.rows[0]).toMatchObject({ values: { promotionPrice: "" }, errors: [] });
+    expect(result.rows[0].skipReason).toBeUndefined();
+    expect(result.rows[0].values).not.toHaveProperty("regularPrice");
+    expect(result.rows[0].values).not.toHaveProperty("startDate");
+    expect(result.rows[0].values).not.toHaveProperty("endDate");
+  });
+  it("blocks duplicate keys between a clear-only row and a priced row", async () => {
     const empty = row(); empty[8] = "";
     const result = await parsePricingWorkbook(await fixture([empty, row()]));
-    expect(result.rows[0].skipReason).toBe("empty_update");
-    expect(result.rows[1].skipReason).toBeUndefined(); expect(result.rows[1].errors).toEqual([]);
+    expect(result.rows.every(source => source.errors.some(error => error.includes("Duplicate matching key")))).toBe(true);
+  });
+  it("keeps incomplete notes without pricing as neutral skips", async () => {
+    const note = row(); note[8] = ""; note[2] = ""; note[5] = ""; note[7] = "";
+    const result = await parsePricingWorkbook(await fixture([note]));
+    expect(result.rows[0]).toMatchObject({ values: {}, skipReason: "empty_update" });
+  });
+  it.each(["TH", "th", "IL"])("accepts the townhouse suite title with %s care level", async care => {
+    const townhouse = row("townhouse-1bed-2beds"); townhouse[5] = care;
+    const result = await parsePricingWorkbook(await fixture([townhouse]));
+    expect(result.rows[0]).toMatchObject({ careLevel: care.toLowerCase(), suiteTitle: "townhouse-1bed-2beds", values: { regularPrice: "5801", promotionPrice: "" }, errors: [] });
+    expect(result.rows[0].skipReason).toBeUndefined();
+  });
+  it("does not turn missing formula results or Excel errors into promotion clears", async () => {
+    for (const cell of ['<c r="J10"><f>I10-100</f></c>', '<c r="J10" t="e"><v>#N/A</v></c>', '<c r="J10" t="e"/>']) {
+      const result = await parsePricingWorkbook(await fixture([row()], { J10: cell }));
+      expect(result.rows[0].errors.length).toBeGreaterThan(0);
+      expect(result.rows[0].values).not.toHaveProperty("promotionPrice");
+      expect(result.rows[0].skipReason).toBeUndefined();
+    }
   });
   it("does not skip malformed prices or formula cells without saved results", async () => {
     const bad = row(); bad[8] = "invalid";
@@ -95,6 +122,15 @@ describe("promotion date and preserve rules", () => {
   it("uses inclusive Toronto end dates over the fall daylight saving change", () => {
     expect(sitecoreDate("2026-11-01", false, "America/Toronto")).toBe("20261101T040000Z");
     expect(sitecoreDate("2026-11-01", true, "America/Toronto")).toBe("20261102T045959Z");
+  });
+  it("clears only the promotion price and preserves blank regular/date fields", () => {
+    const source: PricingSource = { rowNumber: 10, propertyId: "11263", residence: "Example", careLevel: "th", suiteTitle: "townhouse-1bed-2beds", values: { promotionPrice: "" }, errors: [], warnings: [] };
+    const current = { regularPrice: "5801", promotionPrice: "5600", startDate: "20260101T050000Z", endDate: "20260201T045959Z" };
+    const after = proposedValues(source, current, "America/Toronto");
+    expect(after).toEqual({ ...current, promotionPrice: "" });
+    expect(changedFields(current, after)).toEqual({ promotionPrice: "" });
+    expect(changedFields(after, proposedValues(source, after, "America/Toronto"))).toEqual({});
+    expect(proposedValues(source, { ...current, startDate: "20260301T050000Z" }, "America/Toronto")).toEqual({ ...current, startDate: "20260301T050000Z", promotionPrice: "" });
   });
   it("preserves existing promotion fields and checks the resulting date interval", () => {
     const source: PricingSource = { rowNumber: 10, propertyId: "11263", residence: "Example", careLevel: "il", suiteTitle: "1bed", values: { regularPrice: "6000" }, errors: [], warnings: [] };

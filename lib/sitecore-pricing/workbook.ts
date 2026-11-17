@@ -1,7 +1,7 @@
 import JSZip from "jszip";
 import { SaxesParser } from "saxes";
 import path from "node:path";
-import { PricingError, canonicalSuite, type PricingSource } from "./types.ts";
+import { PricingError, PRICING_CARE_LEVELS, canonicalSuite, type PricingSource } from "./types.ts";
 
 type Cell = { value: string; type: string; formula: boolean };
 type SheetRow = { number: number; cells: Record<string, Cell> };
@@ -138,15 +138,22 @@ export async function parsePricingWorkbook(bytes: Uint8Array) {
     if (!Object.keys(HEADERS).some(key => get(key as keyof typeof HEADERS).value.trim())) continue;
     const source: PricingSource = { rowNumber: row.number, propertyId: get("propertyId").value.trim(), residence: get("residence").value.trim(), careLevel: get("careLevel").value.trim().toLowerCase(), suiteTitle: canonicalSuite(get("suiteTitle").value), values: {}, errors: [], warnings: [] };
     const updateFields = ["regularPrice", "promotionPrice", "startDate", "endDate"] as const;
-    if (updateFields.every(field => { const cell = get(field); return !cell.value.trim() && !cell.formula && cell.type !== "e"; })) source.skipReason = "empty_update";
+    const noInputs = updateFields.every(field => { const cell = get(field); return !cell.value.trim() && !cell.formula && cell.type !== "e"; });
     if (!/^\d{1,12}$/.test(source.propertyId)) source.errors.push("Missing or invalid Web Property ID.");
-    if (!["il", "al", "mc", "sa", "ltc"].includes(source.careLevel)) source.errors.push("Missing or unsupported Marketing Care Level.");
+    if (!PRICING_CARE_LEVELS.some(level => level === source.careLevel)) source.errors.push("Missing or unsupported Marketing Care Level.");
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(source.suiteTitle)) source.errors.push("Missing or invalid Web SuiteTitle.");
+    // Keep note/incomplete rows with no update inputs as neutral skips. A valid
+    // target with no inputs now has an actionable promotion-clear operation.
+    if (noInputs && source.errors.length) source.skipReason = "empty_update";
     for (const field of ["regularPrice", "promotionPrice", "startDate", "endDate"] as const) {
       try {
         const cell = get(field);
+        if (cell.type === "e") throw new Error(`${HEADERS[field]} contains an Excel error. Correct it before importing.`);
         const value = field.endsWith("Date") ? calendarDay(cell, date1904) : price(cell, HEADERS[field]);
         if (value !== undefined) source.values[field] = value;
+        // An explicit empty string survives SQL empty-row detection and becomes
+        // a normal audited field update. Never clear unresolved formula/error cells.
+        else if (field === "promotionPrice" && !source.skipReason) source.values.promotionPrice = "";
         if (cell.formula) source.warnings.push(`${HEADERS[field]} uses Excel's saved formula result. Recalculate and save before uploading.`);
       } catch (error) { source.errors.push(error instanceof Error ? error.message : "Invalid cell value."); }
     }

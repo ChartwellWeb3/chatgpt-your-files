@@ -3,6 +3,7 @@
 // the handler verifies SITECORE_PRICING_DISPATCH_SECRET before any work.
 export const PRICE_FIELDS = ["regularPrice", "promotionPrice", "startDate", "endDate"] as const;
 export const PRICING_ENVIRONMENTS = ["dev", "qa", "prod"] as const;
+export const PRICING_CARE_LEVELS = ["il", "al", "mc", "sa", "ltc", "th"] as const;
 export type PricingEnvironment = typeof PRICING_ENVIRONMENTS[number];
 export type PriceField = typeof PRICE_FIELDS[number];
 export type PriceValues = Partial<Record<PriceField, string>>;
@@ -122,9 +123,9 @@ export function getPricingConfig(env: Record<string, string | undefined> = Deno.
   const timezone = setting("TIMEZONE") || "America/Toronto";
   try { new Intl.DateTimeFormat("en", { timeZone: timezone }).format(); } catch { throw new PricingError("The pricing timezone is invalid.", 503); }
   const fields = { regularPrice: "Regular SuitePrice", promotionPrice: "Promotion Price", startDate: "Start Date", endDate: "End Date" };
-  // Retain the DEV hash for already queued DEV jobs. QA/PROD include their
-  // environment explicitly; no existing import can be retargeted by the UI.
-  const hash = createHash("sha256").update(JSON.stringify({ execution: "edge-auto-v1", ...(environment === "dev" ? {} : { environment }), host: url.origin, root, timezone, propertyTemplateId, suiteTemplateId, fields, suiteAliases: SUITE_ALIASES, residenceMatches: "all", languages: ["en", "fr"], blanks: "preserve", endDate: "inclusive" })).digest("hex");
+  // Blank promotions now clear existing values. The policy hash requires a new
+  // upload, so saved imports from the preserve-all policy are never reinterpreted.
+  const hash = createHash("sha256").update(JSON.stringify({ execution: "edge-auto-v1", ...(environment === "dev" ? {} : { environment }), host: url.origin, root, timezone, propertyTemplateId, suiteTemplateId, fields, suiteAliases: SUITE_ALIASES, careLevels: PRICING_CARE_LEVELS, residenceMatches: "all", languages: ["en", "fr"], blanks: { regularPrice: "preserve", promotionPrice: "clear", startDate: "preserve", endDate: "preserve" }, endDate: "inclusive" })).digest("hex");
   return { environment, host: url.origin, endpoint: `${url.origin}/sitecore/api/authoring/graphql/v1/`, clientId, clientSecret, root, timezone, propertyTemplateId, suiteTemplateId, fields, hash };
 }
 
@@ -187,7 +188,7 @@ export function proposedValues(source: PricingSource, current: PriceValues, time
     values[field] = field === "startDate" || field === "endDate" ? sitecoreDate(value, field === "endDate", timezone) : value;
   }
   if (values.promotionPrice && (!values.startDate || !values.endDate)) throw new PricingError("The resulting promotion needs both start and end dates. Blank cells preserve existing dates.");
-  if (values.startDate && values.endDate && values.endDate < values.startDate) throw new PricingError("The resulting promotion end date precedes its start date.");
+  if ((values.promotionPrice || source.values.startDate || source.values.endDate) && values.startDate && values.endDate && values.endDate < values.startDate) throw new PricingError("The resulting promotion end date precedes its start date.");
   return values;
 }
 export function sameValues(a: PriceValues, b: PriceValues): boolean { return PRICE_FIELDS.every(key => (a[key] || "") === (b[key] || "")); }

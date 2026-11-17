@@ -2,7 +2,7 @@
 
 This directory owns the separate Supabase setup for website performance, GEO monitoring, and Sitecore pricing import jobs. The existing Next.js frontend and login are shared with the chatbot application.
 
-For the DEV/QA/PROD suite pricing importer, see [SITECORE-PRICING.md](SITECORE-PRICING.md). It uses Run → automatic updates with durable Supabase Edge batches, saved progress, and conditional developer diagnostics. The guide includes the paste-ready Edge file, timestamped SQL updates and recovery Cron setup; the website-performance migration history remains unchanged.
+For the DEV/QA/PROD suite pricing importer, see [SITECORE-PRICING.md](SITECORE-PRICING.md). It uses Run → automatic updates with durable Supabase Edge batches, saved progress, hidden issue/warning details, and updates-only CSV reports. The guide includes the paste-ready Edge file, timestamped SQL updates and recovery Cron setup; the website-performance migration history remains unchanged.
 
 ## Project ownership
 
